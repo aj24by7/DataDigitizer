@@ -1,7 +1,6 @@
 # 📊 Raman Data Digitizer  
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![Build](https://img.shields.io/badge/Build-Passing-brightgreen)  
 ![Contributions](https://img.shields.io/badge/Contributions-Welcome-orange)  
 
 This tool helps you **extract numerical data from graph images**.  

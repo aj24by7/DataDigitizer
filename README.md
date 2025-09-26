@@ -8,7 +8,8 @@ If you have a picture of a line graph (e.g., from a research paper or presentati
 
 ---
 
-![Software Picture](images/softwareDemoImg.png)
+![Software Example](images/softwareDemoImg.png)
+![Digitized Spectra Example](images/softwareDemoResultsImg.png)
 
 ---
 

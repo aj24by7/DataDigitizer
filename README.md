@@ -8,6 +8,10 @@ If you have a picture of a line graph (e.g., from a research paper or presentati
 
 ---
 
+![Software Picture]()
+
+---
+
 ## 🚀 Getting Started  
 
 1. **Run the Program**  

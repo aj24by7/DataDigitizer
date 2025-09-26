@@ -1,7 +1,7 @@
 # 📊 Raman Data Digitizer  
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue)  
-![License](https://img.shields.io/badge/License-MIT-green)  
+![License]()  
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen)  
 ![Contributions](https://img.shields.io/badge/Contributions-Welcome-orange)  
 

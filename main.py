@@ -748,7 +748,7 @@ class MovableStatisticsPanel:
 class RamanDataDigitizer:
     def __init__(self, root):
         self.root = root
-        self.root.title("Raman Spectra Data Digitizer - Advanced Line Masking System")
+        self.root.title("Raman Spectra Data Digitizer")
         self.root.geometry("1400x900")
         
         # Modern Color Scheme
@@ -2428,8 +2428,8 @@ class RamanDataDigitizer:
                     p2 = all_points[j+1]
                     y_dist = abs(p2[1] - p1[1])
                     
-                    if y_dist > 5:
-                        num_new_points = int(y_dist * (3/5))
+                    if y_dist > 2:
+                        num_new_points = int(y_dist * (1))
                         if num_new_points > 1:
                             x_vals = np.linspace(p1[0], p2[0], num_new_points, dtype=int)
                             y_vals = np.linspace(p1[1], p2[1], num_new_points, dtype=int)

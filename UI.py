@@ -62,7 +62,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         top_bar.addWidget(self.tools_button)
 
         self.filters_button = QtWidgets.QToolButton()
-        self.filters_button.setText("Filters")
+        self.filters_button.setText("Advanced")
         self.filters_button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
         self.filters_menu = QtWidgets.QMenu(self)
         self.act_chroma_filter = self.filters_menu.addAction("Chroma Filter")
@@ -157,7 +157,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             self._selected_color = (color.red(), color.green(), color.blue())
             self._update_color_swatch(color)
             self.act_pick_color.setChecked(False)
-            self.status_label.setText("Selected color set.")
+            self.status_label.setText(f"Selected color: {self._selected_color}")
 
     def place_points(self) -> None:
         if self._image is None:

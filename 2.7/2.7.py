@@ -11,7 +11,7 @@ from ErrorLogger import log_exception
 def _prompt_launch() -> bool:
     banner = [
         "========================================",
-        " Data Digitizer 2.6",
+        " Data Digitizer 2.7",
         "----------------------------------------",
         " GitHub: https://github.com/aj24by7/DataDigitizer",
         "========================================",

@@ -1,4 +1,4 @@
-# Data Digitizer 2.6
+# Data Digitizer 2.7
 
 The full project documentation is in the repository root:
 
@@ -7,7 +7,7 @@ The full project documentation is in the repository root:
 Quick run:
 
 ```bash
-python 2.6.py
+python 2.7.py
 ```
 
 At launch prompt:

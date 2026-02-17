@@ -14,6 +14,144 @@ from ImageTray import ImageTray
 from PointPlacer import PlacedPoint, find_points_by_color, interpolate_points
 
 
+class ZoomViewport(QtWidgets.QWidget):
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+        self._pixmap = QtGui.QPixmap()
+        self.setFixedSize(280, 180)
+
+    def set_pixmap(self, pixmap: QtGui.QPixmap) -> None:
+        self._pixmap = pixmap
+        self.update()
+
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        painter = QtGui.QPainter(self)
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        painter.fillRect(rect, QtGui.QColor(22, 22, 22))
+
+        if not self._pixmap.isNull():
+            scaled = self._pixmap.scaled(
+                rect.size(),
+                QtCore.Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+            src_x = max(0, (scaled.width() - rect.width()) // 2)
+            src_y = max(0, (scaled.height() - rect.height()) // 2)
+            src = QtCore.QRect(src_x, src_y, rect.width(), rect.height())
+            painter.drawPixmap(rect, scaled, src)
+
+        painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, 180), 3))
+        cx = rect.center().x()
+        cy = rect.center().y()
+        arm = 10
+        painter.drawLine(cx - arm, cy, cx + arm, cy)
+        painter.drawLine(cx, cy - arm, cx, cy + arm)
+
+        painter.setPen(QtGui.QPen(QtGui.QColor(255, 70, 70), 1))
+        painter.drawLine(cx - arm, cy, cx + arm, cy)
+        painter.drawLine(cx, cy - arm, cx, cy + arm)
+
+
+class CursorZoomPanel(QtWidgets.QFrame):
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+        self._zoom_factor = 4.0
+        self._zoom_step = 0.5
+        self._min_zoom = 1.5
+        self._max_zoom = 12.0
+
+        self.setObjectName("cursorZoomPanel")
+        self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.setFixedSize(300, 234)
+        self.setStyleSheet(
+            "#cursorZoomPanel {"
+            "background: rgba(255, 255, 255, 235);"
+            "border: 1px solid #9aa0a6;"
+            "border-radius: 6px;"
+            "}"
+            "QToolButton { min-width: 24px; }"
+        )
+
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(6)
+
+        header = QtWidgets.QHBoxLayout()
+        header.setSpacing(6)
+        title = QtWidgets.QLabel("Cursor Zoom")
+        title.setStyleSheet("font-weight: 600;")
+        header.addWidget(title)
+        header.addStretch(1)
+
+        self.zoom_out_button = QtWidgets.QToolButton()
+        self.zoom_out_button.setText("-")
+        self.zoom_out_button.setToolTip("Zoom out")
+        header.addWidget(self.zoom_out_button)
+
+        self.zoom_value_label = QtWidgets.QLabel()
+        self.zoom_value_label.setMinimumWidth(38)
+        self.zoom_value_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        header.addWidget(self.zoom_value_label)
+
+        self.zoom_in_button = QtWidgets.QToolButton()
+        self.zoom_in_button.setText("+")
+        self.zoom_in_button.setToolTip("Zoom in")
+        header.addWidget(self.zoom_in_button)
+
+        outer.addLayout(header)
+
+        self.viewport = ZoomViewport(self)
+        outer.addWidget(self.viewport)
+
+        self.zoom_out_button.clicked.connect(lambda: self._adjust_zoom(-self._zoom_step))
+        self.zoom_in_button.clicked.connect(lambda: self._adjust_zoom(self._zoom_step))
+
+        self._timer = QtCore.QTimer(self)
+        self._timer.setInterval(33)
+        self._timer.timeout.connect(self.refresh_view)
+        self._timer.start()
+        self._update_zoom_label()
+        self.refresh_view()
+
+    def _adjust_zoom(self, delta: float) -> None:
+        new_factor = self._zoom_factor + delta
+        self._zoom_factor = max(self._min_zoom, min(self._max_zoom, new_factor))
+        self._update_zoom_label()
+        self.refresh_view()
+
+    def _update_zoom_label(self) -> None:
+        self.zoom_value_label.setText(f"{self._zoom_factor:.1f}x")
+
+    def showEvent(self, event: QtGui.QShowEvent) -> None:
+        super().showEvent(event)
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def hideEvent(self, event: QtGui.QHideEvent) -> None:
+        super().hideEvent(event)
+        self._timer.stop()
+
+    def refresh_view(self) -> None:
+        if not self.isVisible():
+            return
+        cursor_pos = QtGui.QCursor.pos()
+        screen = QtGui.QGuiApplication.screenAt(cursor_pos)
+        if screen is None:
+            screen = QtGui.QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+
+        sample_w = max(24, int(round(self.viewport.width() / self._zoom_factor)))
+        sample_h = max(24, int(round(self.viewport.height() / self._zoom_factor)))
+        sample_x = int(round(cursor_pos.x() - sample_w / 2))
+        sample_y = int(round(cursor_pos.y() - sample_h / 2))
+
+        pixmap = screen.grabWindow(0, sample_x, sample_y, sample_w, sample_h)
+        if pixmap.isNull():
+            return
+        self.viewport.set_pixmap(pixmap)
+
+
 class DigitizerWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -47,6 +185,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             "y_min": None,
             "y_max": None,
         }
+        self.zoom_panel: Optional[CursorZoomPanel] = None
 
         self._build_ui()
 
@@ -209,6 +348,27 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.image_tray.image_clicked.connect(self.on_image_clicked)
         self.image_tray.mask_rect_created.connect(self.on_mask_rect_created)
         self.image_tray.mask_remove_requested.connect(self.on_mask_remove_requested)
+
+        self.zoom_panel = CursorZoomPanel(central)
+        self.zoom_panel.show()
+        self._position_zoom_panel()
+        self.zoom_panel.raise_()
+        QtCore.QTimer.singleShot(0, self._position_zoom_panel)
+
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._position_zoom_panel()
+
+    def _position_zoom_panel(self) -> None:
+        if self.zoom_panel is None:
+            return
+        central = self.centralWidget()
+        if central is None:
+            return
+        margin = 10
+        x = max(margin, central.width() - self.zoom_panel.width() - margin)
+        self.zoom_panel.move(x, margin)
+        self.zoom_panel.raise_()
 
     def open_image_dialog(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(

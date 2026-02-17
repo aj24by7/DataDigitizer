@@ -1,4 +1,4 @@
-# Data Digitizer 2.5
+# Data Digitizer 2.6
 
 The full project documentation is in the repository root:
 
@@ -15,4 +15,3 @@ At launch prompt:
 ```text
 Run program? [y/n]: y
 ```
-

@@ -1,4 +1,4 @@
-# Data Digitizer 2.5
+# Data Digitizer 2.6
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-PyQt6-41CD52?logo=qt&logoColor=white)
@@ -331,4 +331,3 @@ Suggested contribution style:
 ## License
 
 No `LICENSE` file is currently present in this repository. Add one if you plan to distribute or accept external contributions under defined terms.
-

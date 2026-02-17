@@ -1,0 +1,15 @@
+timestamp,context,message,traceback
+2026-02-16 00:04:08,Unhandled exception,AttributeError: 'DigitizerWindow' object has no attribute 'run_axis_detection',"Traceback (most recent call last):
+  File ""C:\Users\User\Downloads\CROI\2.5\2.5.py"", line 47, in <module>
+    main()
+    ~~~~^^
+  File ""C:\Users\User\Downloads\CROI\2.5\2.5.py"", line 41, in main
+    window = DigitizerWindow()
+  File ""C:\Users\User\Downloads\CROI\2.5\UI.py"", line 51, in __init__
+    self._build_ui()
+    ~~~~~~~~~~~~~~^^
+  File ""C:\Users\User\Downloads\CROI\2.5\UI.py"", line 192, in _build_ui
+    self.act_axis_run.triggered.connect(self.run_axis_detection)
+                                        ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DigitizerWindow' object has no attribute 'run_axis_detection'
+"

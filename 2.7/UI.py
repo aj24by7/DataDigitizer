@@ -529,7 +529,11 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             rects = detect_word_masks(self._image)
         except Exception as exc:
             log_exception("Mask words", exc)
-            self.status_label.setText("Mask words failed. See error log.")
+            detail = str(exc).strip()
+            if detail:
+                self.status_label.setText(f"Mask words failed: {detail}")
+            else:
+                self.status_label.setText("Mask words failed. See error log.")
             return
         self._set_mask_category("words", rects)
         self.status_label.setText("Masked words.")
@@ -542,7 +546,11 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             rects = detect_number_masks(self._image)
         except Exception as exc:
             log_exception("Mask numbers", exc)
-            self.status_label.setText("Mask numbers failed. See error log.")
+            detail = str(exc).strip()
+            if detail:
+                self.status_label.setText(f"Mask numbers failed: {detail}")
+            else:
+                self.status_label.setText("Mask numbers failed. See error log.")
             return
         self._set_mask_category("numbers", rects)
         self.status_label.setText("Masked numbers.")
@@ -555,7 +563,11 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             rects = detect_legend_mask(self._image)
         except Exception as exc:
             log_exception("Mask legend", exc)
-            self.status_label.setText("Mask legend failed. See error log.")
+            detail = str(exc).strip()
+            if detail:
+                self.status_label.setText(f"Mask legend failed: {detail}")
+            else:
+                self.status_label.setText("Mask legend failed. See error log.")
             return
         if not rects:
             self.status_label.setText("Legend mask not found.")

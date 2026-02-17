@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import re
+import shutil
 from typing import List, Optional, Tuple
 
 from PyQt6 import QtGui
@@ -65,7 +67,12 @@ def _extract_ocr_boxes(image: QtGui.QImage) -> List[OcrBox]:
         return []
     prepped = _preprocess_for_ocr(pil_image)
     config = "--psm 6"
-    data = pytesseract.image_to_data(prepped, output_type=Output.DICT, config=config)
+    try:
+        data = pytesseract.image_to_data(prepped, output_type=Output.DICT, config=config)
+    except Exception as exc:
+        if _is_tesseract_not_found(exc):
+            raise RuntimeError(_missing_tesseract_message()) from exc
+        raise
     results: List[OcrBox] = []
     count = len(data.get("text", []))
     for i in range(count):
@@ -170,21 +177,43 @@ def _preprocess_for_ocr(image: "Image.Image") -> "Image.Image":
 def _configure_tesseract() -> None:
     if pytesseract is None:
         return
-    local_exe = _find_local_tesseract()
+    local_exe = _resolve_tesseract_executable()
     if local_exe is not None:
         pytesseract.pytesseract.tesseract_cmd = str(local_exe)
 
 
-def _find_local_tesseract() -> Optional[Path]:
+def _resolve_tesseract_executable() -> Optional[Path]:
     here = Path(__file__).resolve()
+    env_cmd = os.environ.get("TESSERACT_CMD", "").strip().strip('"')
     candidates = [
+        Path(env_cmd) if env_cmd else None,
         here.parent / "vendor" / "tesseract" / "tesseract.exe",
         here.parent.parent / "vendor" / "tesseract" / "tesseract.exe",
+        Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
+        Path(r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"),
     ]
     for path in candidates:
+        if path is None:
+            continue
         if path.is_file():
             return path
+    on_path = shutil.which("tesseract")
+    if on_path:
+        return Path(on_path)
     return None
+
+
+def _missing_tesseract_message() -> str:
+    return (
+        "Tesseract OCR executable not found. Install Tesseract and add it to PATH, "
+        "or set TESSERACT_CMD, or place it at vendor/tesseract/tesseract.exe."
+    )
+
+
+def _is_tesseract_not_found(exc: BaseException) -> bool:
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    return name == "TesseractNotFoundError" or "tesseract is not installed" in msg
 
 
 def _bbox_to_rect(bbox: Tuple[int, int, int, int]) -> Tuple[float, float, float, float]:

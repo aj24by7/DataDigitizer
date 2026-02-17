@@ -72,7 +72,7 @@ Recommended:
 Optional for advanced features:
 
 - `pillow` + `pytesseract` (OCR axis detection and OCR masking)
-- Tesseract OCR engine installed and available on `PATH` (or placed in `vendor/tesseract/tesseract.exe`)
+- Tesseract OCR engine installed and available on `PATH` (or set `TESSERACT_CMD`, or place it in `vendor/tesseract/tesseract.exe`)
 - `openpyxl` (Excel export)
 
 ## Installation
@@ -121,6 +121,12 @@ tesseract --version
 ```
 
 If this fails, install Tesseract OCR and ensure it is on your system `PATH`.
+
+Windows install (winget):
+
+```powershell
+winget install --id tesseract-ocr.tesseract --accept-source-agreements --accept-package-agreements
+```
 
 ## Quick Start (2 Minutes)
 

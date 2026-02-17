@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import re
+import shutil
 from typing import List, Optional, Tuple
 
 from PyQt6 import QtGui
@@ -59,12 +61,17 @@ def detect_axis_scale(image: QtGui.QImage) -> AxisScaleResult:
     if pil_image is None:
         raise AxisDetectionError("Failed to convert image for OCR.")
 
-    numbers_orig = _extract_numbers(_preprocess_for_ocr(pil_image))
+    try:
+        numbers_orig = _extract_numbers(_preprocess_for_ocr(pil_image))
 
-    # Rotated scan (always run to catch vertical labels)
-    rotated = pil_image.rotate(-90, expand=True)
-    y_numbers_rot = _extract_numbers(_preprocess_for_ocr(rotated))
-    numbers_rotated = [_map_rotated_number_to_original(det, pil_image.height) for det in y_numbers_rot]
+        # Rotated scan (always run to catch vertical labels)
+        rotated = pil_image.rotate(-90, expand=True)
+        y_numbers_rot = _extract_numbers(_preprocess_for_ocr(rotated))
+        numbers_rotated = [_map_rotated_number_to_original(det, pil_image.height) for det in y_numbers_rot]
+    except Exception as exc:
+        if _is_tesseract_not_found(exc):
+            raise AxisDetectionError(_missing_tesseract_message()) from exc
+        raise
 
     all_numbers = numbers_orig + numbers_rotated
 
@@ -95,22 +102,43 @@ def detect_axis_scale(image: QtGui.QImage) -> AxisScaleResult:
 def _configure_tesseract() -> None:
     if pytesseract is None:
         return
-    local_exe = _find_local_tesseract()
+    local_exe = _resolve_tesseract_executable()
     if local_exe is not None:
         pytesseract.pytesseract.tesseract_cmd = str(local_exe)
-        return
 
 
-def _find_local_tesseract() -> Optional[Path]:
+def _resolve_tesseract_executable() -> Optional[Path]:
     here = Path(__file__).resolve()
+    env_cmd = os.environ.get("TESSERACT_CMD", "").strip().strip('"')
     candidates = [
+        Path(env_cmd) if env_cmd else None,
         here.parent / "vendor" / "tesseract" / "tesseract.exe",
         here.parent.parent / "vendor" / "tesseract" / "tesseract.exe",
+        Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
+        Path(r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"),
     ]
     for path in candidates:
+        if path is None:
+            continue
         if path.is_file():
             return path
+    on_path = shutil.which("tesseract")
+    if on_path:
+        return Path(on_path)
     return None
+
+
+def _missing_tesseract_message() -> str:
+    return (
+        "Tesseract OCR executable not found. Install Tesseract and add it to PATH, "
+        "or set TESSERACT_CMD, or place it at vendor/tesseract/tesseract.exe."
+    )
+
+
+def _is_tesseract_not_found(exc: BaseException) -> bool:
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    return name == "TesseractNotFoundError" or "tesseract is not installed" in msg
 
 
 def _qimage_to_pil(image: QtGui.QImage) -> Optional["Image.Image"]:

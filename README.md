@@ -125,8 +125,8 @@ If this fails, install Tesseract OCR and ensure it is on your system `PATH`.
 ## Quick Start (2 Minutes)
 
 ```bash
-cd 2.5
-python 2.5.py
+cd 2.6
+python 2.6.py
 ```
 
 When prompted:
@@ -251,8 +251,8 @@ During export, the app can use an affine mapper from calibration points. This is
 
 - In-app log viewer: `Advanced -> Error Log`
 - Persistent logs:
-  - `2.5/logs/error_log.txt`
-  - `2.5/logs/error_log.csv`
+  - `2.6/logs/error_log.txt`
+  - `2.6/logs/error_log.csv`
 
 Use these logs when reporting issues.
 
@@ -305,8 +305,8 @@ Accuracy tips:
 ## Project Structure
 
 ```text
-2.5/
-  2.5.py            # App entry point (PyQt6)
+2.6/
+  2.6.py            # App entry point (PyQt6)
   UI.py             # Main window and workflows
   ImageTray.py      # Canvas rendering and interaction
   PointPlacer.py    # Color-based point extraction + interpolation

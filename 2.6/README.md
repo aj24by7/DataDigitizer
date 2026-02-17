@@ -7,7 +7,7 @@ The full project documentation is in the repository root:
 Quick run:
 
 ```bash
-python 2.5.py
+python 2.6.py
 ```
 
 At launch prompt:

@@ -1,4 +1,4 @@
-# Data Digitizer 2.7
+# Data Digitizer 2.8
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-PyQt6-41CD52?logo=qt&logoColor=white)
@@ -131,8 +131,8 @@ winget install --id tesseract-ocr.tesseract --accept-source-agreements --accept-
 ## Quick Start (2 Minutes)
 
 ```bash
-cd 2.7
-python 2.7.py
+cd 2.8
+python 2.8.py
 ```
 
 When prompted:
@@ -257,8 +257,8 @@ During export, the app can use an affine mapper from calibration points. This is
 
 - In-app log viewer: `Advanced -> Error Log`
 - Persistent logs:
-  - `2.7/logs/error_log.txt`
-  - `2.7/logs/error_log.csv`
+  - `2.8/logs/error_log.txt`
+  - `2.8/logs/error_log.csv`
 
 Use these logs when reporting issues.
 
@@ -311,8 +311,8 @@ Accuracy tips:
 ## Project Structure
 
 ```text
-2.7/
-  2.7.py            # App entry point (PyQt6)
+2.8/
+  2.8.py            # App entry point (PyQt6)
   UI.py             # Main window and workflows
   ImageTray.py      # Canvas rendering and interaction
   PointPlacer.py    # Color-based point extraction + interpolation

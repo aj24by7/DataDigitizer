@@ -10,6 +10,10 @@ Quick run:
 python 2.8.py
 ```
 
+Top-level folder name: `dev`
+
+Versioned filenames inside the folder remain `2.8.py`, `version.json`, etc.
+
 At launch prompt:
 
 ```text

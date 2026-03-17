@@ -131,7 +131,7 @@ winget install --id tesseract-ocr.tesseract --accept-source-agreements --accept-
 ## Quick Start (2 Minutes)
 
 ```bash
-cd 2.7
+cd main
 python 2.7.py
 ```
 
@@ -257,8 +257,8 @@ During export, the app can use an affine mapper from calibration points. This is
 
 - In-app log viewer: `Advanced -> Error Log`
 - Persistent logs:
-  - `2.7/logs/error_log.txt`
-  - `2.7/logs/error_log.csv`
+  - `main/logs/error_log.txt`
+  - `main/logs/error_log.csv`
 
 Use these logs when reporting issues.
 
@@ -311,7 +311,7 @@ Accuracy tips:
 ## Project Structure
 
 ```text
-2.7/
+main/
   2.7.py            # App entry point (PyQt6)
   UI.py             # Main window and workflows
   ImageTray.py      # Canvas rendering and interaction

@@ -1,4 +1,4 @@
-# Data Digitizer 2.7
+# Data Digitizer 2.9
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-PyQt6-41CD52?logo=qt&logoColor=white)
@@ -132,13 +132,14 @@ winget install --id tesseract-ocr.tesseract --accept-source-agreements --accept-
 
 ```bash
 cd main
-python 2.7.py
+python 2.9.py
 ```
 
-When prompted:
+At the launcher prompt:
 
 ```text
-Run program? [y/n]: y
+1 = Data Digitizer
+4 = Click Test Software
 ```
 
 Then in the GUI:
@@ -312,8 +313,9 @@ Accuracy tips:
 
 ```text
 main/
-  2.7.py            # App entry point (PyQt6)
+  2.9.py            # App entry point (PyQt6)
   UI.py             # Main window and workflows
+  ClickTestSoftware.py  # Click-test trainer and CSV analysis UI
   ImageTray.py      # Canvas rendering and interaction
   PointPlacer.py    # Color-based point extraction + interpolation
   AxisReader.py     # OCR axis detection

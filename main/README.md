@@ -1,4 +1,4 @@
-# Data Digitizer 2.7
+# Data Digitizer 2.9
 
 The full project documentation is in the repository root:
 
@@ -7,15 +7,12 @@ The full project documentation is in the repository root:
 Quick run:
 
 ```bash
-python 2.7.py
+python 2.9.py
 ```
 
-Top-level folder name: `main`
-
-Versioned filenames inside the folder remain `2.7.py`, `version.json`, etc.
-
-At launch prompt:
+At launch prompt, select an option:
 
 ```text
-Run program? [y/n]: y
+1 = Data Digitizer
+4 = Click Test Software
 ```

@@ -11,25 +11,26 @@ from ErrorLogger import log_exception
 def _prompt_action() -> str:
     banner = [
         "========================================",
-        " Data Digitizer 2.7",
+        " Data Digitizer 2.9",
         "----------------------------------------",
         " GitHub: https://github.com/aj24by7/DataDigitizer",
         "========================================",
         " 1) Launch Data Digitizer (PyQt)",
         " 2) Launch Accuracy Tester Pro",
         " 3) Launch Accuracy Tester (legacy)",
-        " 4) Exit",
+        " 4) Launch Click Test Software",
+        " 5) Exit",
     ]
     print("\n".join(banner))
     while True:
-        choice = input("Select option [1-4] (y=1, n=4): ").strip().lower()
-        if choice in {"1", "2", "3", "4"}:
+        choice = input("Select option [1-5] (y=1, n=5): ").strip().lower()
+        if choice in {"1", "2", "3", "4", "5"}:
             return choice
         if choice in {"y", "yes"}:
             return "1"
         if choice in {"n", "no", "q", "quit", "exit"}:
-            return "4"
-        print("Please enter 1, 2, 3, or 4.")
+            return "5"
+        print("Please enter 1, 2, 3, 4, or 5.")
 
 
 def _launch_digitizer() -> None:
@@ -69,20 +70,40 @@ def _launch_accuracy_tester_legacy() -> None:
     accuracy_tester_main()
 
 
+def _launch_click_test_software() -> None:
+    try:
+        from ClickTestSoftware import main as click_test_main
+    except ModuleNotFoundError as exc:
+        print(f"Cannot launch Click Test Software: missing dependency or module ({exc.name}).")
+        print("Install GUI dependencies: pip install PyQt6")
+        return
+
+    click_test_main()
+
+
 def main() -> None:
-    action = _prompt_action()
-    if action == "4":
-        print("Exiting. See you next time.")
-        return
-    if action == "1":
-        _launch_digitizer()
-        return
-    if action == "2":
-        _launch_accuracy_tester_pro()
-        return
-    if action == "3":
-        _launch_accuracy_tester_legacy()
-        return
+    while True:
+        try:
+            action = _prompt_action()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting. See you next time.")
+            return
+
+        if action == "5":
+            print("Exiting. See you next time.")
+            return
+        if action == "1":
+            _launch_digitizer()
+        elif action == "2":
+            _launch_accuracy_tester_pro()
+        elif action == "3":
+            _launch_accuracy_tester_legacy()
+        elif action == "4":
+            _launch_click_test_software()
+
+        print()
+        print("Returned to launcher.")
+        print()
 
 
 if __name__ == "__main__":

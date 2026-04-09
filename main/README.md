@@ -1,4 +1,4 @@
-# Data Digitizer 2.9
+# Data Digitizer 2.10
 
 The full project documentation is in the repository root:
 
@@ -7,12 +7,13 @@ The full project documentation is in the repository root:
 Quick run:
 
 ```bash
-python 2.9.py
+python 2.10.py
 ```
 
 At launch prompt, select an option:
 
 ```text
 1 = Data Digitizer
-4 = Click Test Software
+2 = Accuracy Tester Pro
+3 = Click Test Software
 ```

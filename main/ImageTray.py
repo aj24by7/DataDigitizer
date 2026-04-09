@@ -14,6 +14,7 @@ class ImageTray(QtWidgets.QWidget):
         super().__init__(parent)
         self._image: Optional[QtGui.QImage] = None
         self._points: list[Tuple[int, int]] = []
+        self._point_groups: list[tuple[list[Tuple[int, int]], QtGui.QColor, bool]] = []
         self._axis_points: list[Tuple[float, float]] = []
         self._axis_rects: list[Tuple[float, float, float, float]] = []
         self._calibration_points: list[Tuple[float, float]] = []
@@ -37,6 +38,7 @@ class ImageTray(QtWidgets.QWidget):
     def set_image(self, image: QtGui.QImage) -> None:
         self._image = image
         self._points = []
+        self._point_groups = []
         self._axis_points = []
         self._axis_rects = []
         self._calibration_points = []
@@ -49,6 +51,22 @@ class ImageTray(QtWidgets.QWidget):
 
     def set_points(self, points: Iterable[Tuple[float, float]]) -> None:
         self._points = list(points)
+        self._point_groups = []
+        self.update()
+
+    def set_point_groups(
+        self,
+        groups: Iterable[tuple[Iterable[Tuple[float, float]], tuple[int, int, int], bool]],
+    ) -> None:
+        normalized: list[tuple[list[Tuple[int, int]], QtGui.QColor, bool]] = []
+        for points, rgb, is_active in groups:
+            point_list = [(int(x), int(y)) for x, y in points]
+            if not point_list:
+                continue
+            color = QtGui.QColor(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+            normalized.append((point_list, color, bool(is_active)))
+        self._point_groups = normalized
+        self._points = []
         self.update()
 
     def set_axis_overlays(
@@ -102,7 +120,9 @@ class ImageTray(QtWidgets.QWidget):
             self._draw_mask_overlays(painter, target)
         if self._mask_preview:
             self._draw_mask_preview(painter, target)
-        if self._points:
+        if self._point_groups:
+            self._draw_point_groups(painter, target)
+        elif self._points:
             self._draw_points(painter, target)
         if self._axis_points or self._axis_rects:
             self._draw_axis_overlays(painter, target)
@@ -207,6 +227,23 @@ class ImageTray(QtWidgets.QWidget):
             px = target.left() + x * scale_x
             py = target.top() + y * scale_y
             painter.drawEllipse(QtCore.QPointF(px, py), 3, 3)
+
+    def _draw_point_groups(self, painter: QtGui.QPainter, target: QtCore.QRectF) -> None:
+        scale_x = target.width() / self._image.width()
+        scale_y = target.height() / self._image.height()
+        for points, color, is_active in self._point_groups:
+            alpha = 255 if is_active else 170
+            draw_color = QtGui.QColor(color)
+            draw_color.setAlpha(alpha)
+            pen = QtGui.QPen(draw_color)
+            pen.setWidth(3 if is_active else 2)
+            painter.setPen(pen)
+            painter.setBrush(QtGui.QBrush(draw_color))
+            radius = 3.5 if is_active else 2.8
+            for x, y in points:
+                px = target.left() + x * scale_x
+                py = target.top() + y * scale_y
+                painter.drawEllipse(QtCore.QPointF(px, py), radius, radius)
 
     def _draw_axis_overlays(self, painter: QtGui.QPainter, target: QtCore.QRectF) -> None:
         pen = QtGui.QPen(QtGui.QColor(255, 140, 0))

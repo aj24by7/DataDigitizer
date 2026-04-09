@@ -267,11 +267,8 @@ def build_round_image(variation: RoundVariation, active_point: Optional[str]) ->
     for key, label in POINT_ORDER:
         x, y = variation.targets[key]
         is_active = key == active_point
-        outline = QtGui.QColor(190, 0, 0) if is_active else QtGui.QColor(0, 0, 0)
-        fill = QtGui.QColor(255, 230, 230) if is_active else QtGui.QColor(255, 255, 255)
-        painter.setPen(QtGui.QPen(outline, 2))
-        painter.setBrush(QtGui.QBrush(fill))
-        painter.drawEllipse(QtCore.QRectF(x - 7, y - 7, 14, 14))
+        cross_color = QtGui.QColor(190, 0, 0) if is_active else QtGui.QColor(0, 0, 0)
+        painter.setPen(QtGui.QPen(cross_color, 2))
         painter.drawLine(x - 10, y, x + 10, y)
         painter.drawLine(x, y - 10, x, y + 10)
         if is_active:

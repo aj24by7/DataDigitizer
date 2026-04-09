@@ -1,4 +1,4 @@
-# Data Digitizer 2.9
+# Data Digitizer 2.10
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-PyQt6-41CD52?logo=qt&logoColor=white)
@@ -39,6 +39,7 @@ Typical use cases:
 - Import image from file or clipboard
 - Auto color suggestion plus manual color picking
 - Point extraction by RGB tolerance
+- Multi-color extraction slots with per-color state and batch export
 - Optional interpolation for denser sampling
 - Optional chroma filter to suppress gray/low-color noise
 - OCR-assisted axis value detection (optional dependency)
@@ -54,6 +55,7 @@ Typical use cases:
 - Export:
   - CSV: raw or Y-normalized
   - Excel (.xlsx): raw or Y-normalized
+- Click Test Software for graph-click training and CSV accuracy analysis
 - Error logging UI and persistent logs
 
 ## Requirements
@@ -132,14 +134,15 @@ winget install --id tesseract-ocr.tesseract --accept-source-agreements --accept-
 
 ```bash
 cd main
-python 2.9.py
+python 2.10.py
 ```
 
 At the launcher prompt:
 
 ```text
 1 = Data Digitizer
-4 = Click Test Software
+2 = Accuracy Tester Pro
+3 = Click Test Software
 ```
 
 Then in the GUI:
@@ -267,6 +270,10 @@ Use these logs when reporting issues.
 
 Raw export columns:
 
+- `color_slot`
+- `color_r`
+- `color_g`
+- `color_b`
 - `x`
 - `y`
 - `x_px` (pixel x)
@@ -313,8 +320,9 @@ Accuracy tips:
 
 ```text
 main/
-  2.9.py            # App entry point (PyQt6)
+  2.10.py           # App entry point (PyQt6)
   UI.py             # Main window and workflows
+  AccuracyTesterPro.py  # One-color-at-a-time comparison for exports
   ClickTestSoftware.py  # Click-test trainer and CSV analysis UI
   ImageTray.py      # Canvas rendering and interaction
   PointPlacer.py    # Color-based point extraction + interpolation

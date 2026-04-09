@@ -11,26 +11,25 @@ from ErrorLogger import log_exception
 def _prompt_action() -> str:
     banner = [
         "========================================",
-        " Data Digitizer 2.9",
+        " Data Digitizer 2.10",
         "----------------------------------------",
         " GitHub: https://github.com/aj24by7/DataDigitizer",
         "========================================",
         " 1) Launch Data Digitizer (PyQt)",
         " 2) Launch Accuracy Tester Pro",
-        " 3) Launch Accuracy Tester (legacy)",
-        " 4) Launch Click Test Software",
-        " 5) Exit",
+        " 3) Launch Click Test Software",
+        " 4) Exit",
     ]
     print("\n".join(banner))
     while True:
-        choice = input("Select option [1-5] (y=1, n=5): ").strip().lower()
-        if choice in {"1", "2", "3", "4", "5"}:
+        choice = input("Select option [1-4] (y=1, n=4): ").strip().lower()
+        if choice in {"1", "2", "3", "4"}:
             return choice
         if choice in {"y", "yes"}:
             return "1"
         if choice in {"n", "no", "q", "quit", "exit"}:
-            return "5"
-        print("Please enter 1, 2, 3, 4, or 5.")
+            return "4"
+        print("Please enter 1, 2, 3, or 4.")
 
 
 def _launch_digitizer() -> None:
@@ -58,18 +57,6 @@ def _launch_accuracy_tester_pro() -> None:
 
     accuracy_tester_pro_main()
 
-
-def _launch_accuracy_tester_legacy() -> None:
-    try:
-        from AccuracyTester import main as accuracy_tester_main
-    except ModuleNotFoundError as exc:
-        print(f"Cannot launch Accuracy Tester (legacy): missing dependency or module ({exc.name}).")
-        print("Install legacy tester dependencies: pip install pandas numpy scipy matplotlib tkinterdnd2")
-        return
-
-    accuracy_tester_main()
-
-
 def _launch_click_test_software() -> None:
     try:
         from ClickTestSoftware import main as click_test_main
@@ -89,7 +76,7 @@ def main() -> None:
             print("\nExiting. See you next time.")
             return
 
-        if action == "5":
+        if action == "4":
             print("Exiting. See you next time.")
             return
         if action == "1":
@@ -97,8 +84,6 @@ def main() -> None:
         elif action == "2":
             _launch_accuracy_tester_pro()
         elif action == "3":
-            _launch_accuracy_tester_legacy()
-        elif action == "4":
             _launch_click_test_software()
 
         print()

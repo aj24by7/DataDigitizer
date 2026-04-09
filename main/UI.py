@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -152,6 +153,28 @@ class CursorZoomPanel(QtWidgets.QFrame):
         self.viewport.set_pixmap(pixmap)
 
 
+class PersistentSelectionMenu(QtWidgets.QMenu):
+    def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
+        action = self.actionAt(event.position().toPoint())
+        if action is not None and action.isEnabled() and action.menu() is None:
+            action.trigger()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+
+@dataclass
+class ColorExtractionState:
+    color: Optional[Tuple[int, int, int]] = None
+    base_points: list[PlacedPoint] = field(default_factory=list)
+    points: list[PlacedPoint] = field(default_factory=list)
+    interpolate_enabled: bool = False
+    limit_points_to_calib: bool = False
+    pick_color_mode: bool = False
+
+
+
+
 class DigitizerWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -185,6 +208,10 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             "y_min": None,
             "y_max": None,
         }
+        self._color_states: list[ColorExtractionState] = [ColorExtractionState()]
+        self._active_color_index = 0
+        self._export_selected_color_indices: set[int] = set()
+        self._slot_buttons: list[QtWidgets.QAbstractButton] = []
         self.zoom_panel: Optional[CursorZoomPanel] = None
 
         self._build_ui()
@@ -277,6 +304,10 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_export_excel_raw = self.export_excel_menu.addAction("Raw values")
         self.act_export_excel_norm = self.export_excel_menu.addAction("Y normalized (0-1)")
         self.export_menu.addMenu(self.export_excel_menu)
+        self.export_menu.addSeparator()
+        self.export_selection_menu = PersistentSelectionMenu("Colors to Export", self.export_menu)
+        self.export_selection_menu.aboutToShow.connect(self._refresh_export_selection_menu)
+        self.export_menu.addMenu(self.export_selection_menu)
         self.export_button.setMenu(self.export_menu)
         top_bar.addWidget(self.export_button)
 
@@ -315,12 +346,12 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.color_row.setSpacing(6)
         self.selected_color_label = QtWidgets.QLabel("Selected color")
         self.selected_color_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-        self.color_swatch = QtWidgets.QLabel()
-        swatch_size = self.selected_color_label.sizeHint().height()
-        self.color_swatch.setFixedSize(swatch_size, swatch_size)
-        self.color_swatch.setStyleSheet("border: 1px solid black; background: white;")
         self.color_row.addWidget(self.selected_color_label)
-        self.color_row.addWidget(self.color_swatch)
+        self.color_slots_widget = QtWidgets.QWidget()
+        self.color_slots_layout = QtWidgets.QHBoxLayout(self.color_slots_widget)
+        self.color_slots_layout.setContentsMargins(0, 0, 0, 0)
+        self.color_slots_layout.setSpacing(4)
+        self.color_row.addWidget(self.color_slots_widget)
         self.color_row.addStretch(1)
         layout.addLayout(self.color_row)
 
@@ -354,6 +385,8 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._position_zoom_panel()
         self.zoom_panel.raise_()
         QtCore.QTimer.singleShot(0, self._position_zoom_panel)
+        self._rebuild_color_slot_buttons()
+        self._sync_active_color_actions()
 
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
         super().resizeEvent(event)
@@ -369,6 +402,214 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         x = max(margin, central.width() - self.zoom_panel.width() - margin)
         self.zoom_panel.move(x, margin)
         self.zoom_panel.raise_()
+
+    def _active_color_state(self) -> ColorExtractionState:
+        return self._color_states[self._active_color_index]
+
+    def _save_active_color_state(self) -> None:
+        state = self._active_color_state()
+        state.color = self._selected_color
+        state.base_points = list(self._base_points)
+        state.points = list(self._points)
+        state.interpolate_enabled = self._interpolate_enabled
+        state.limit_points_to_calib = self._limit_points_to_calib
+        state.pick_color_mode = self._pick_color_mode
+
+    def _restore_active_color_state(self) -> None:
+        state = self._active_color_state()
+        self._selected_color = state.color
+        self._base_points = list(state.base_points)
+        self._points = list(state.points)
+        self._interpolate_enabled = state.interpolate_enabled
+        self._limit_points_to_calib = state.limit_points_to_calib
+        self._pick_color_mode = state.pick_color_mode
+
+    def _color_slot_label(self, index: int) -> str:
+        state = self._color_states[index]
+        if state.color is None:
+            return f"Color {index + 1}"
+        return f"Color {index + 1} ({state.color[0]}, {state.color[1]}, {state.color[2]})"
+
+    def _available_color_indices(self, require_points: bool = False) -> list[int]:
+        indices: list[int] = []
+        for index, state in enumerate(self._color_states):
+            if state.color is None:
+                continue
+            if require_points and not state.points:
+                continue
+            indices.append(index)
+        return indices
+
+    def _normalize_export_color_selection(self) -> None:
+        available = set(self._available_color_indices())
+        self._export_selected_color_indices &= available
+        if not self._export_selected_color_indices and available:
+            if self._active_color_index in available:
+                self._export_selected_color_indices = {self._active_color_index}
+            else:
+                self._export_selected_color_indices = {min(available)}
+
+    def _refresh_export_selection_menu(self) -> None:
+        self._save_active_color_state()
+        self._normalize_export_color_selection()
+        self.export_selection_menu.clear()
+
+        active_action = self.export_selection_menu.addAction("Active Color Only")
+        active_action.triggered.connect(self._set_export_active_color_only)
+        all_action = self.export_selection_menu.addAction("All Configured Colors")
+        all_action.triggered.connect(self._set_export_all_colors)
+        self.export_selection_menu.addSeparator()
+
+        available = self._available_color_indices()
+        if not available:
+            placeholder = self.export_selection_menu.addAction("No colors configured")
+            placeholder.setEnabled(False)
+            return
+
+        for index in available:
+            action = self.export_selection_menu.addAction(self._color_slot_label(index))
+            action.setCheckable(True)
+            action.setChecked(index in self._export_selected_color_indices)
+            action.toggled.connect(lambda checked, color_index=index: self._toggle_export_color(color_index, checked))
+
+    def _set_export_active_color_only(self) -> None:
+        if self._selected_color is None:
+            self._export_selected_color_indices.clear()
+        else:
+            self._export_selected_color_indices = {self._active_color_index}
+        if self.export_selection_menu.isVisible():
+            QtCore.QTimer.singleShot(0, self._refresh_export_selection_menu)
+
+    def _set_export_all_colors(self) -> None:
+        self._export_selected_color_indices = set(self._available_color_indices())
+        if self.export_selection_menu.isVisible():
+            QtCore.QTimer.singleShot(0, self._refresh_export_selection_menu)
+
+    def _toggle_export_color(self, index: int, checked: bool) -> None:
+        if checked:
+            self._export_selected_color_indices.add(index)
+        else:
+            self._export_selected_color_indices.discard(index)
+
+    def _slot_button_style(
+        self,
+        is_active: bool,
+        color: Optional[Tuple[int, int, int]],
+        is_add_button: bool = False,
+    ) -> str:
+        border_color = "#1a7f37" if is_active else "#000000"
+        border_width = "2px" if is_active else "1px"
+        if color is None:
+            background = "#ffffff" if is_add_button else "#f1f3f4"
+        else:
+            background = f"rgb({color[0]}, {color[1]}, {color[2]})"
+        text_color = "#1a7f37" if is_add_button else "#000000"
+        return (
+            "QToolButton {"
+            f"border: {border_width} solid {border_color};"
+            "border-radius: 2px;"
+            f"background: {background};"
+            f"color: {text_color};"
+            "font-weight: 600;"
+            "font-size: 14px;"
+            "padding: 0px;"
+            "margin: 0px;"
+            "}"
+        )
+
+    def _set_active_color_index(self, index: int) -> None:
+        if index < 0 or index >= len(self._color_states) or index == self._active_color_index:
+            return
+        self._save_active_color_state()
+        self._active_color_index = index
+        self._restore_active_color_state()
+        self._sync_active_color_actions()
+        self._rebuild_color_slot_buttons()
+        self._refresh_point_overlays()
+        self._set_status_for_active_color()
+
+    def _set_status_for_active_color(self, prefix: str = "") -> None:
+        label = self._color_slot_label(self._active_color_index)
+        if self._selected_color is None:
+            message = f"{label} is active. Use Pick Color to assign this slot."
+        else:
+            point_suffix = f" Points: {len(self._points)}."
+            message = f"{label} is active.{point_suffix}"
+        if prefix:
+            message = prefix + " " + message
+        self.status_label.setText(message)
+
+    def _add_color_slot(self) -> None:
+        self._save_active_color_state()
+        self._color_states.append(ColorExtractionState())
+        self._active_color_index = len(self._color_states) - 1
+        self._restore_active_color_state()
+        self._sync_active_color_actions()
+        self._rebuild_color_slot_buttons()
+        self._refresh_point_overlays()
+        self._set_status_for_active_color("Added a new color slot.")
+
+    def _rebuild_color_slot_buttons(self) -> None:
+        while self.color_slots_layout.count():
+            item = self.color_slots_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        self._slot_buttons = []
+        swatch_size = max(20, self.selected_color_label.sizeHint().height())
+        for index, state in enumerate(self._color_states):
+            button = QtWidgets.QToolButton()
+            button.setFixedSize(swatch_size, swatch_size)
+            button.setToolTip(self._color_slot_label(index))
+            button.setText("")
+            button.setStyleSheet(self._slot_button_style(index == self._active_color_index, state.color))
+            button.clicked.connect(lambda _checked=False, color_index=index: self._set_active_color_index(color_index))
+            self.color_slots_layout.addWidget(button)
+            self._slot_buttons.append(button)
+            if index < len(self._color_states) - 1:
+                comma_label = QtWidgets.QLabel(",")
+                comma_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+                self.color_slots_layout.addWidget(comma_label)
+
+        plus_button = QtWidgets.QToolButton()
+        plus_button.setFixedSize(swatch_size, swatch_size)
+        plus_button.setText("+")
+        plus_button.setToolTip("Add color slot")
+        plus_button.setStyleSheet(self._slot_button_style(False, None, is_add_button=True))
+        plus_button.clicked.connect(self._add_color_slot)
+        self.color_slots_layout.addWidget(plus_button)
+
+    def _sync_active_color_actions(self) -> None:
+        for action, checked in (
+            (self.act_interpolate, self._interpolate_enabled),
+            (self.act_place_points_limit, self._limit_points_to_calib),
+            (self.act_pick_color, self._pick_color_mode),
+        ):
+            action.blockSignals(True)
+            action.setChecked(checked)
+            action.blockSignals(False)
+        if self._pick_color_mode:
+            self.image_tray.setCursor(QtCore.Qt.CursorShape.CrossCursor)
+        else:
+            self.image_tray.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
+
+    def _inverse_rgb(self, color: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        return 255 - color[0], 255 - color[1], 255 - color[2]
+
+    def _refresh_point_overlays(self) -> None:
+        groups: list[tuple[list[tuple[int, int]], tuple[int, int, int], bool]] = []
+        for index, state in enumerate(self._color_states):
+            if state.color is None or not state.points:
+                continue
+            groups.append(
+                (
+                    [(pt.x, pt.y) for pt in state.points],
+                    self._inverse_rgb(state.color),
+                    index == self._active_color_index,
+                )
+            )
+        self.image_tray.set_point_groups(groups)
 
     def open_image_dialog(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -402,7 +643,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._base_points = []
         self._points = []
         self.image_tray.set_image(image)
-        self.image_tray.set_points([])
+        self.image_tray.set_point_groups([])
         self.image_tray.set_axis_overlays([], [])
         self.image_tray.set_calibration_overlays([], None)
         self.image_tray.set_mask_overlays([])
@@ -416,26 +657,42 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_mask_manual.setChecked(False)
         self.image_tray.set_mask_draw_enabled(False)
         auto_color = self._auto_select_color(image)
+        self._selected_color = auto_color
+        self._interpolate_enabled = False
+        self._limit_points_to_calib = False
+        self._pick_color_mode = False
+        self._color_states = [
+            ColorExtractionState(
+                color=auto_color,
+                base_points=[],
+                points=[],
+                interpolate_enabled=False,
+                limit_points_to_calib=False,
+                pick_color_mode=False,
+            )
+        ]
+        self._active_color_index = 0
+        self._export_selected_color_indices = {0} if auto_color is not None else set()
+        self._restore_active_color_state()
+        self._sync_active_color_actions()
+        self._rebuild_color_slot_buttons()
+        self._refresh_point_overlays()
         if auto_color:
-            self._selected_color = auto_color
             self._update_color_swatch(QtGui.QColor(*auto_color))
             self.status_label.setText(f"Image loaded. Auto-selected color: {auto_color}")
         else:
-            self._selected_color = None
             self._update_color_swatch(QtGui.QColor(255, 255, 255))
             self.status_label.setText("Image loaded. Pick a color to start.")
 
     def toggle_pick_color(self, checked: bool) -> None:
         self._pick_color_mode = checked
+        self._active_color_state().pick_color_mode = checked
         if checked:
             self.image_tray.setCursor(QtCore.Qt.CursorShape.CrossCursor)
-            self.status_label.setText("Pick color: click on the image.")
+            self.status_label.setText(f"Pick color for {self._color_slot_label(self._active_color_index)}: click on the image.")
         else:
             self.image_tray.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
-            if self._selected_color:
-                self.status_label.setText(f"Selected color: {self._selected_color}")
-            else:
-                self.status_label.setText("Pick a color from the image.")
+            self._set_status_for_active_color()
 
     def on_image_clicked(self, x: int, y: int) -> None:
         if self._image is None:
@@ -446,9 +703,17 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         if self._pick_color_mode:
             color = self._image.pixelColor(x, y)
             self._selected_color = (color.red(), color.green(), color.blue())
+            state = self._active_color_state()
+            state.color = self._selected_color
+            state.base_points = []
+            state.points = []
+            self._base_points = []
+            self._points = []
             self._update_color_swatch(color)
+            self._refresh_point_overlays()
+            self._rebuild_color_slot_buttons()
             self.act_pick_color.setChecked(False)
-            self.status_label.setText(f"Selected color: {self._selected_color}")
+            self.status_label.setText(f"Assigned {self._selected_color} to {self._color_slot_label(self._active_color_index)}.")
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() == QtCore.Qt.Key.Key_Escape and self._mask_mode:
@@ -467,17 +732,20 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._compute_points()
         suffix = " (interpolated)" if self._interpolate_enabled else ""
         limit_suffix = " (limited to calibration)" if self._limit_points_to_calib else ""
-        self.status_label.setText(f"Placed {len(self._points)} points{suffix}{limit_suffix}.")
+        self.status_label.setText(
+            f"{self._color_slot_label(self._active_color_index)} placed {len(self._points)} points{suffix}{limit_suffix}."
+        )
 
     def toggle_interpolation(self, checked: bool) -> None:
         self._interpolate_enabled = checked
+        self._active_color_state().interpolate_enabled = checked
         if self._image is None or self._selected_color is None:
             state = "on" if checked else "off"
             self.status_label.setText(f"Interpolation {state}. Load an image and pick a color.")
             return
         self._compute_points()
         state = "on" if checked else "off"
-        self.status_label.setText(f"Interpolation {state}. Points: {len(self._points)}.")
+        self.status_label.setText(f"Interpolation {state} for {self._color_slot_label(self._active_color_index)}. Points: {len(self._points)}.")
 
     def toggle_chroma_filter(self, checked: bool) -> None:
         self._chroma_filter_enabled = checked
@@ -491,35 +759,49 @@ class DigitizerWindow(QtWidgets.QMainWindow):
 
     def toggle_limit_points(self, checked: bool) -> None:
         self._limit_points_to_calib = checked
+        self._active_color_state().limit_points_to_calib = checked
         if self._image is None or self._selected_color is None:
             state = "on" if checked else "off"
             self.status_label.setText(f"Limit to calibration {state}.")
             return
         self._compute_points()
         state = "on" if checked else "off"
-        self.status_label.setText(f"Limit to calibration {state}. Points: {len(self._points)}.")
+        self.status_label.setText(
+            f"Limit to calibration {state} for {self._color_slot_label(self._active_color_index)}. Points: {len(self._points)}."
+        )
 
-    def _apply_interpolation(self, points: list[PlacedPoint]) -> list[PlacedPoint]:
-        if self._interpolate_enabled:
+    def _apply_interpolation(self, points: list[PlacedPoint], enabled: Optional[bool] = None) -> list[PlacedPoint]:
+        use_interpolation = self._interpolate_enabled if enabled is None else enabled
+        if use_interpolation:
             return interpolate_points(points, segment_len=5.0, points_per_segment=3)
         return list(points)
 
-    def _compute_points(self) -> None:
+    def _compute_points_for_state(self, state: ColorExtractionState) -> None:
+        if self._image is None or state.color is None:
+            state.base_points = []
+            state.points = []
+            return
         min_chroma = self._chroma_min if self._chroma_filter_enabled else None
-        self._base_points = find_points_by_color(
+        base_points = find_points_by_color(
             self._image,
-            self._selected_color,
+            state.color,
             min_chroma=min_chroma,
             exclude_rects=self._all_mask_rects(),
         )
-        points = self._base_points
-        if self._limit_points_to_calib:
+        points = base_points
+        if state.limit_points_to_calib:
             box = self._get_calibration_box()
             if box is not None:
                 left, right, top, bottom = box
                 points = [pt for pt in points if left <= pt.x <= right and top <= pt.y <= bottom]
-        self._points = self._apply_interpolation(points)
-        self.image_tray.set_points([(pt.x, pt.y) for pt in self._points])
+        state.base_points = list(base_points)
+        state.points = self._apply_interpolation(points, enabled=state.interpolate_enabled)
+
+    def _compute_points(self) -> None:
+        state = self._active_color_state()
+        self._compute_points_for_state(state)
+        self._restore_active_color_state()
+        self._refresh_point_overlays()
 
     def run_mask_words(self) -> None:
         if self._image is None:
@@ -633,15 +915,6 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return
-        if not self._points:
-            if self._selected_color is None:
-                self.status_label.setText("Pick a color and place points first.")
-                return
-            self._compute_points()
-        if not self._points:
-            self.status_label.setText("No points available to export.")
-            return
-
         axis_values = self._get_axis_values()
         if axis_values is None:
             self.status_label.setText("Export requires X/Y min/max values.")
@@ -658,30 +931,50 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             if right <= left or bottom <= top:
                 self.status_label.setText("Calibration box is invalid. Re-run calibration.")
                 return
-
-        rows = []
-        for pt in self._points:
-            x_px = pt.x
-            y_px = pt.y
-            if mapper is not None:
-                x_val, y_val = self._map_pixel_affine(mapper, x_px, y_px)
-            else:
-                x_val = x_min_val + (x_px - left) * (x_max_val - x_min_val) / (right - left)
-                y_val = y_min_val + (bottom - y_px) * (y_max_val - y_min_val) / (bottom - top)
-            row = [x_val, y_val, x_px, y_px]
-            if normalize_y:
-                denom = y_max_val - y_min_val
-                y_norm = (y_val - y_min_val) / denom if denom != 0 else 0.0
-                row.append(y_norm)
-            rows.append(row)
-
-        if not rows:
-            self.status_label.setText("No points available to export.")
+        self._save_active_color_state()
+        self._normalize_export_color_selection()
+        selected_indices = sorted(self._export_selected_color_indices)
+        if not selected_indices:
+            self.status_label.setText("Choose at least one configured color in Export -> Colors to Export.")
             return
 
-        headers = ["x", "y", "x_px", "y_px"]
+        headers = ["color_slot", "color_r", "color_g", "color_b", "x", "y", "x_px", "y_px"]
         if normalize_y:
             headers.append("y_norm")
+
+        rows: list[list[float]] = []
+        exported_indices: list[int] = []
+        for index in selected_indices:
+            state = self._color_states[index]
+            if state.color is None:
+                continue
+            if not state.points:
+                self._compute_points_for_state(state)
+            if not state.points:
+                continue
+            exported_indices.append(index)
+            color_r, color_g, color_b = state.color
+            for pt in state.points:
+                x_px = pt.x
+                y_px = pt.y
+                if mapper is not None:
+                    x_val, y_val = self._map_pixel_affine(mapper, x_px, y_px)
+                else:
+                    x_val = x_min_val + (x_px - left) * (x_max_val - x_min_val) / (right - left)
+                    y_val = y_min_val + (bottom - y_px) * (y_max_val - y_min_val) / (bottom - top)
+                row: list[float] = [index + 1, color_r, color_g, color_b, x_val, y_val, x_px, y_px]
+                if normalize_y:
+                    denom = y_max_val - y_min_val
+                    y_norm = (y_val - y_min_val) / denom if denom != 0 else 0.0
+                    row.append(y_norm)
+                rows.append(row)
+
+        self._restore_active_color_state()
+        self._refresh_point_overlays()
+
+        if not rows:
+            self.status_label.setText("No points available to export for the selected colors.")
+            return
 
         saved = False
         if kind == "csv":
@@ -691,7 +984,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         if not saved:
             return
         suffix = " (normalized)" if normalize_y else ""
-        msg = f"Exported {len(rows)} points{suffix}."
+        msg = f"Exported {len(rows)} points across {len(exported_indices)} color slot(s){suffix}."
         self.status_label.setText(msg)
 
     def _export_csv(self, headers: list[str], rows: list[list[float]]) -> bool:
@@ -898,9 +1191,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
 
 
     def _update_color_swatch(self, color: QtGui.QColor) -> None:
-        self.color_swatch.setStyleSheet(
-            f"border: 1px solid black; background: rgb({color.red()}, {color.green()}, {color.blue()});"
-        )
+        self._rebuild_color_slot_buttons()
 
     def run_axis_detection(self) -> None:
         if self._image is None:

@@ -1,7 +1,7 @@
 ﻿import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,6 +27,13 @@ class SeriesData:
     unique_rows: int
 
 
+@dataclass
+class ColorSlotOption:
+    value: Any
+    slot_text: str
+    label: str
+
+
 class AccuracyTesterPro:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -35,10 +42,17 @@ class AccuracyTesterPro:
 
         self.original_df: Optional[pd.DataFrame] = None
         self.digitized_df: Optional[pd.DataFrame] = None
+        self.original_slot_options: list[ColorSlotOption] = []
+        self.digitized_slot_options: list[ColorSlotOption] = []
         self.result: Optional[Dict[str, object]] = None
         self.canvas: Optional[FigureCanvasTkAgg] = None
         self.current_outlier_index = 0
+        self.initial_status_text = "Load two CSV files. Drag and drop is {}.".format(
+            "enabled" if HAS_DND else "not available (install tkinterdnd2)"
+        )
         self.outlier_label_var = tk.StringVar(value="Outlier zoom: n/a")
+        self.original_slot_var = tk.StringVar(value="")
+        self.digitized_slot_var = tk.StringVar(value="")
 
         self._build_ui()
 
@@ -58,11 +72,7 @@ class AccuracyTesterPro:
             font=("Arial", 15, "bold"),
         ).grid(row=0, column=0, columnspan=2, sticky="w")
 
-        self.status_var = tk.StringVar(
-            value="Load two CSV files. Drag and drop is {}.".format(
-                "enabled" if HAS_DND else "not available (install tkinterdnd2)"
-            )
-        )
+        self.status_var = tk.StringVar(value=self.initial_status_text)
         ttk.Label(main, textvariable=self.status_var).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 8))
 
         file_box = ttk.LabelFrame(main, text="Data Input", padding=10)
@@ -106,6 +116,8 @@ class AccuracyTesterPro:
 
         opts = ttk.LabelFrame(main, text="Settings", padding=10)
         opts.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        opts.columnconfigure(3, weight=1)
+        opts.columnconfigure(7, weight=1)
 
         ttk.Label(opts, text="X column").grid(row=0, column=0, sticky="w")
         self.x_col_var = tk.StringVar(value="x")
@@ -154,8 +166,28 @@ class AccuracyTesterPro:
         self.shift_steps_var = tk.StringVar(value="121")
         ttk.Entry(opts, textvariable=self.shift_steps_var, width=8).grid(row=1, column=7, padx=(4, 12), pady=(8, 0))
 
+        ttk.Label(opts, text="Original color slot").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.orig_slot_combo = ttk.Combobox(
+            opts,
+            textvariable=self.original_slot_var,
+            state="disabled",
+            width=28,
+        )
+        self.orig_slot_combo.grid(row=2, column=1, columnspan=3, sticky="ew", padx=(4, 12), pady=(8, 0))
+        self.orig_slot_combo.bind("<<ComboboxSelected>>", lambda _e: self._on_color_slot_changed("original"))
+
+        ttk.Label(opts, text="Digitized color slot").grid(row=2, column=4, sticky="w", pady=(8, 0))
+        self.dig_slot_combo = ttk.Combobox(
+            opts,
+            textvariable=self.digitized_slot_var,
+            state="disabled",
+            width=28,
+        )
+        self.dig_slot_combo.grid(row=2, column=5, columnspan=3, sticky="ew", padx=(4, 0), pady=(8, 0))
+        self.dig_slot_combo.bind("<<ComboboxSelected>>", lambda _e: self._on_color_slot_changed("digitized"))
+
         actions = ttk.Frame(opts)
-        actions.grid(row=2, column=0, columnspan=8, sticky="ew", pady=(10, 0))
+        actions.grid(row=3, column=0, columnspan=8, sticky="ew", pady=(10, 0))
         actions.columnconfigure(5, weight=1)
 
         self.process_btn = ttk.Button(actions, text="Process & Compare", command=self.process_data, state="disabled")
@@ -224,18 +256,171 @@ class AccuracyTesterPro:
             messagebox.showerror("Load Error", f"Failed to load CSV:\n{path}\n\n{exc}")
             return
 
+        slot_options = self._extract_color_slot_options(df)
         cols = ", ".join(map(str, df.columns))
-        summary = f"{len(df)} rows\nColumns: {cols}"
+        summary_lines = [f"{len(df)} rows", f"Columns: {cols}"]
+        if slot_options:
+            summary_lines.append(f"Color slots: {self._slot_summary_text(slot_options)}")
+        summary = "\n".join(summary_lines)
         if file_type == "original":
             self.original_df = df
+            self.original_slot_options = slot_options
+            self._configure_slot_combo("original")
             self.orig_label.config(text=f"Original CSV Loaded\n{summary}")
         else:
             self.digitized_df = df
+            self.digitized_slot_options = slot_options
+            self._configure_slot_combo("digitized")
             self.dig_label.config(text=f"Digitized/Synth CSV Loaded\n{summary}")
 
-        if self.original_df is not None and self.digitized_df is not None:
-            self.process_btn.config(state="normal")
-            self.status_var.set("Ready to compare.")
+        self._clear_result_state()
+
+    @staticmethod
+    def _format_slot_value(value: Any) -> str:
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, (int, np.integer)):
+            return str(int(value))
+        if isinstance(value, (float, np.floating)) and float(value).is_integer():
+            return str(int(value))
+        return str(value)
+
+    def _extract_color_slot_options(self, df: pd.DataFrame) -> list[ColorSlotOption]:
+        if "color_slot" not in df.columns:
+            return []
+
+        rgb_cols = ("color_r", "color_g", "color_b")
+        has_rgb = all(col in df.columns for col in rgb_cols)
+        options: list[ColorSlotOption] = []
+        seen: set[str] = set()
+
+        for _, row in df.loc[df["color_slot"].notna()].iterrows():
+            value = row["color_slot"]
+            slot_text = self._format_slot_value(value)
+            if slot_text in seen:
+                continue
+            seen.add(slot_text)
+
+            label = f"Slot {slot_text}"
+            if has_rgb:
+                try:
+                    rgb = [int(round(float(row[col]))) for col in rgb_cols]
+                except (TypeError, ValueError):
+                    rgb = []
+                if len(rgb) == 3:
+                    label = f"{label} ({rgb[0]}, {rgb[1]}, {rgb[2]})"
+
+            options.append(ColorSlotOption(value=value, slot_text=slot_text, label=label))
+
+        return options
+
+    @staticmethod
+    def _slot_summary_text(options: list[ColorSlotOption]) -> str:
+        summary = ", ".join(option.slot_text for option in options[:8])
+        if len(options) > 8:
+            summary += ", ..."
+        return summary
+
+    def _get_slot_options(self, file_type: str) -> list[ColorSlotOption]:
+        if file_type == "original":
+            return self.original_slot_options
+        return self.digitized_slot_options
+
+    def _get_slot_combo(self, file_type: str) -> ttk.Combobox:
+        if file_type == "original":
+            return self.orig_slot_combo
+        return self.dig_slot_combo
+
+    def _get_slot_var(self, file_type: str) -> tk.StringVar:
+        if file_type == "original":
+            return self.original_slot_var
+        return self.digitized_slot_var
+
+    @staticmethod
+    def _file_title(file_type: str) -> str:
+        return "Original" if file_type == "original" else "Digitized"
+
+    def _configure_slot_combo(self, file_type: str) -> None:
+        options = self._get_slot_options(file_type)
+        combo = self._get_slot_combo(file_type)
+        slot_var = self._get_slot_var(file_type)
+        if options:
+            combo.config(values=[option.label for option in options], state="readonly")
+            combo.current(0)
+        else:
+            combo.config(values=(), state="disabled")
+            slot_var.set("")
+
+    def _selected_slot_option(self, file_type: str) -> Optional[ColorSlotOption]:
+        options = self._get_slot_options(file_type)
+        if not options:
+            return None
+        combo = self._get_slot_combo(file_type)
+        index = combo.current()
+        if index < 0 or index >= len(options):
+            index = 0
+        return options[index]
+
+    def _on_color_slot_changed(self, file_type: str) -> None:
+        if not self._get_slot_options(file_type):
+            return
+        self._clear_result_state()
+
+    def _clear_result_state(self) -> None:
+        self.result = None
+        self.current_outlier_index = 0
+        self.export_btn.config(state="disabled")
+        self._update_outlier_controls()
+        self.info_label.config(text="")
+        self.results_text.delete("1.0", tk.END)
+        if self.canvas is not None:
+            self.canvas.get_tk_widget().destroy()
+            self.canvas = None
+        ready = self.original_df is not None and self.digitized_df is not None
+        self.process_btn.config(state="normal" if ready else "disabled")
+        self.status_var.set("Ready to compare." if ready else self.initial_status_text)
+
+    def _filtered_df_for_processing(self, file_type: str) -> Tuple[pd.DataFrame, Optional[ColorSlotOption]]:
+        df = self.original_df if file_type == "original" else self.digitized_df
+        if df is None:
+            raise ValueError(f"{self._file_title(file_type)} CSV is not loaded.")
+
+        slot_option = self._selected_slot_option(file_type)
+        if slot_option is None or "color_slot" not in df.columns:
+            return df, None
+
+        filtered = df[df["color_slot"] == slot_option.value]
+        if filtered.empty:
+            raise ValueError(f"{self._file_title(file_type)} selected color slot {slot_option.slot_text} has no rows.")
+        return filtered, slot_option
+
+    def _prepare_series_for_file(
+        self,
+        file_type: str,
+        x_col: str,
+        y_col: str,
+        dup_policy: str,
+    ) -> Tuple[SeriesData, Optional[ColorSlotOption]]:
+        filtered_df, slot_option = self._filtered_df_for_processing(file_type)
+        try:
+            series = self._prepare_series(filtered_df, x_col, y_col, dup_policy)
+        except ValueError as exc:
+            if slot_option is None:
+                raise
+            raise ValueError(
+                f"{self._file_title(file_type)} selected color slot {slot_option.slot_text}: {exc}"
+            ) from exc
+
+        if series.x.size < 2:
+            if slot_option is None:
+                raise ValueError(
+                    f"{self._file_title(file_type)} dataset must contain at least 2 valid unique points after cleanup."
+                )
+            raise ValueError(
+                f"{self._file_title(file_type)} selected color slot {slot_option.slot_text} "
+                "has fewer than 2 valid unique points after cleanup."
+            )
+        return series, slot_option
 
     def _parse_int(self, text: str, default: int, min_value: int = 1) -> int:
         t = str(text).strip()
@@ -485,10 +670,8 @@ class AccuracyTesterPro:
             shift_steps = self._parse_int(self.shift_steps_var.get(), default=121, min_value=5)
             max_abs_shift = self._parse_float(self.max_shift_var.get())
 
-            orig = self._prepare_series(self.original_df, x_col, y_col, dup_policy)
-            dig = self._prepare_series(self.digitized_df, x_col, y_col, dup_policy)
-            if orig.x.size < 2 or dig.x.size < 2:
-                raise ValueError("Each dataset must contain at least 2 valid unique points after cleanup.")
+            orig, orig_slot = self._prepare_series_for_file("original", x_col, y_col, dup_policy)
+            dig, dig_slot = self._prepare_series_for_file("digitized", x_col, y_col, dup_policy)
 
             x_shift = 0.0
             shift_meta: Dict[str, object] = {"reason": "disabled", "best_rmse": np.nan}
@@ -535,6 +718,8 @@ class AccuracyTesterPro:
                 "dig_cov_pct": dig_cov,
                 "x_shift": float(x_shift),
                 "shift_meta": shift_meta,
+                "orig_slot_label": orig_slot.label if orig_slot is not None else "Full dataset",
+                "dig_slot_label": dig_slot.label if dig_slot is not None else "Full dataset",
                 "outliers": outliers,
             }
 
@@ -544,7 +729,14 @@ class AccuracyTesterPro:
             self._show_results()
             self._draw_plots()
             self.status_var.set("Comparison complete.")
-            self.info_label.config(text=f"Compared {len(x_cmp)} points over overlap [{cmp_meta['overlap_start']:.4g}, {cmp_meta['overlap_end']:.4g}]")
+            self.info_label.config(
+                text=(
+                    f"Compared {len(x_cmp)} points over overlap "
+                    f"[{cmp_meta['overlap_start']:.4g}, {cmp_meta['overlap_end']:.4g}]"
+                    f" | Original: {self.result['orig_slot_label']}"
+                    f" | Digitized: {self.result['dig_slot_label']}"
+                )
+            )
         except Exception as exc:
             self.status_var.set("Comparison failed.")
             messagebox.showerror("Processing Error", str(exc))
@@ -609,6 +801,8 @@ class AccuracyTesterPro:
         lines.append("COMPARISON SETUP")
         lines.append("=" * 72)
         lines.append(f"Grid mode                       : {r['grid_mode']}")
+        lines.append(f"Original color slot             : {r['orig_slot_label']}")
+        lines.append(f"Digitized color slot            : {r['dig_slot_label']}")
         lines.append(f"Overlap X range                 : [{r['overlap_start']:.6f}, {r['overlap_end']:.6f}]")
         lines.append(f"Overlap span                    : {r['overlap_span']:.6f}")
         lines.append(f"Original overlap coverage       : {r['orig_cov_pct']:.2f}%")

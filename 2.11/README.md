@@ -54,6 +54,8 @@ The output is:
 
 ```text
 dist\DataDigitizer-2.11.exe
+dist\digitizer.exe
+dist\accuracytester.exe
 ```
 
-The executable is built as a single PyInstaller one-file console app so it can be called from a terminal and also launched by double-clicking. OCR still requires the Tesseract engine. If a full Tesseract runtime is placed under `vendor\tesseract` before building, the spec bundles it into the one-file executable.
+`digitizer.exe` and `accuracytester.exe` are windowed desktop apps with no terminal window. OCR requires the Tesseract engine at `C:\Program Files\Tesseract-OCR\tesseract.exe` or a bundled runtime under `vendor\tesseract`.

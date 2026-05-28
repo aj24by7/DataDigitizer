@@ -4,3 +4,6 @@ numpy
 pillow
 pytesseract
 openpyxl
+pandas
+matplotlib
+tkinterdnd2

@@ -51,6 +51,16 @@ def configure_runtime_paths() -> None:
     if tessdata.exists() and "TESSDATA_PREFIX" not in os.environ:
         os.environ["TESSDATA_PREFIX"] = str(tessdata)
 
+    tesseract_cmd = _resolve_tesseract_cmd(bundle_root)
+    if tesseract_cmd is not None:
+        os.environ.setdefault("TESSERACT_CMD", str(tesseract_cmd))
+        try:
+            import pytesseract
+
+            pytesseract.pytesseract.tesseract_cmd = str(tesseract_cmd)
+        except Exception:
+            pass
+
 
 def launch_digitizer_gui() -> int:
     from PyQt6 import QtWidgets
@@ -106,6 +116,18 @@ def _user_app_data_dir() -> Path:
     if base:
         return Path(base) / "DataDigitizer" / "2.11"
     return Path.home() / ".datadigitizer" / "2.11"
+
+
+def _resolve_tesseract_cmd(bundle_root: Path) -> Path | None:
+    candidates = [
+        bundle_root / "vendor" / "tesseract" / "tesseract.exe",
+        Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
+        Path(r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"),
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 if __name__ == "__main__":

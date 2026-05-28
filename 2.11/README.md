@@ -79,3 +79,7 @@ dist\accuracytester.exe
 ```
 
 `digitizer.exe` and `accuracytester.exe` are windowed desktop apps with no terminal window. OCR requires the Tesseract engine at `C:\Program Files\Tesseract-OCR\tesseract.exe` or a bundled runtime under `vendor\tesseract`.
+
+## Sending To Another Windows 11 User
+
+The Desktop `digitizer.exe` build can be made fully self-contained by bundling the Tesseract runtime under `vendor\tesseract` before building. The resulting executable is large, so Outlook may block or reject a direct `.exe` attachment. If that happens, send `DataDigitizer-Windows11-Apps.zip` through OneDrive/SharePoint or another file link instead of attaching the raw executable.

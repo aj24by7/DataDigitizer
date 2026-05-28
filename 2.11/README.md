@@ -12,6 +12,26 @@ Double-clicking the built executable also launches the GUI.
 
 ## Run CLI
 
+Interactive prompt:
+
+```powershell
+py 2.11.py
+```
+
+Then fill in the fields you want:
+
+```text
+Plot location:
+Color RGB [blank/null = auto]:
+Tick coordinates [blank/null = OCR]:
+Xmin Xmax Ymin Ymax [blank/null = OCR]:
+Output directory [blank = image folder]:
+```
+
+Press Enter at the ready prompt to run.
+
+One-line command:
+
 ```powershell
 py digitizer_2_11.py cli --pic-dir path\to\plot.png --color 255,0,0 --ticks "[10,200],[500,200],[10,200],[10,20]" --axis-values 0,10,0,100
 ```

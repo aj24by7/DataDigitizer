@@ -18,6 +18,10 @@ def main(argv: list[str] | None = None) -> int:
         from digitizer_cli import main as cli_main
 
         return cli_main(args[1:])
+    if command in {"interactive", "wizard"}:
+        from digitizer_cli import interactive_main
+
+        return interactive_main()
     if command in {"--help", "-h", "help"}:
         print_help()
         return 0
@@ -86,6 +90,9 @@ def print_help() -> None:
                 "",
                 "Run CLI digitization:",
                 "  DataDigitizer-2.11.exe cli --pic-dir plot.png --color 255,0,0 --ticks \"[10,200],[500,200],[10,200],[10,20]\" --axis-values 0,10,0,100",
+                "",
+                "Run interactive CLI wizard:",
+                "  DataDigitizer-2.11.exe interactive",
                 "",
                 "Show CLI options:",
                 "  DataDigitizer-2.11.exe cli --help",

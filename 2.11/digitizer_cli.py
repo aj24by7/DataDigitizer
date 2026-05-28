@@ -46,6 +46,62 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     return 0
 
 
+def interactive_main() -> int:
+    print()
+    print("Data Digitizer 2.11 Interactive CLI")
+    print("Leave optional fields blank and press Enter to use auto/default behavior.")
+    print()
+
+    while True:
+        try:
+            values = _prompt_values()
+        except (EOFError, KeyboardInterrupt):
+            print("\nCanceled.")
+            return 130
+
+        if values is None:
+            print("Canceled.")
+            return 0
+
+        action = input("Ready. Press Enter to run, type 'edit' to re-enter, or 'q' to quit: ").strip().lower()
+        if action in {"q", "quit", "cancel"}:
+            print("Canceled.")
+            return 0
+        if action == "edit":
+            print()
+            continue
+
+        try:
+            result = digitize_image(
+                pic_dir=values["pic_dir"],
+                color_rgb=parse_rgb(values["color"]),
+                tick_points=parse_points(values["ticks"]),
+                axis_values=parse_numbers(values["axis_values"], expected=4, name="axis-values"),
+                output_dir=values["output_dir"],
+                normalize_y=values["normalize_y"],
+                limit_to_calibration=values["limit_to_calibration"],
+            )
+        except DigitizerCliError as exc:
+            print(f"digitizer error: {exc}", file=sys.stderr)
+            retry = input("Type 'edit' to try again, or press Enter to exit: ").strip().lower()
+            if retry == "edit":
+                print()
+                continue
+            return 2
+        except Exception as exc:
+            print(f"unexpected error: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
+
+        print()
+        print("Done.")
+        print(f"CSV: {result.csv_path}")
+        print(f"Overlay: {result.overlay_path}")
+        print(f"Points: {result.point_count}")
+        print(f"Color RGB: {result.color_rgb}")
+        print(f"Used OCR: {result.used_ocr}")
+        return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="DataDigitizer-2.11 cli",
@@ -139,6 +195,83 @@ def _flatten(value: list[object]) -> list[object]:
 
 def _is_null(value: Optional[str]) -> bool:
     return value is None or value.strip().lower() in {"", "none", "null"}
+
+
+def _prompt_values() -> Optional[dict[str, object]]:
+    while True:
+        pic_dir = _clean_input(input("Plot location: "))
+        if pic_dir.lower() in {"q", "quit", "cancel"}:
+            return None
+        if pic_dir:
+            break
+        print("Plot location is required.")
+
+    while True:
+        color = _clean_input(input("Color RGB [blank/null = auto] (example 255,0,0): "))
+        try:
+            parse_rgb(color)
+            break
+        except DigitizerCliError as exc:
+            print(f"Invalid color: {exc}")
+
+    while True:
+        ticks = _clean_input(
+            input("Tick coordinates [blank/null = OCR] as [x,y],[x,y],[x,y],[x,y]: ")
+        )
+        try:
+            parse_points(ticks)
+            break
+        except DigitizerCliError as exc:
+            print(f"Invalid tick coordinates: {exc}")
+
+    while True:
+        axis_values = _clean_input(input("Xmin Xmax Ymin Ymax [blank/null = OCR] (example 0,10,0,100): "))
+        try:
+            parse_numbers(axis_values, expected=4, name="axis-values")
+            break
+        except DigitizerCliError as exc:
+            print(f"Invalid axis values: {exc}")
+
+    output_dir = _clean_input(input("Output directory [blank = image folder]: "))
+    normalize_y = _prompt_yes_no("Add normalized Y column? [y/N]: ", default=False)
+    limit_to_calibration = _prompt_yes_no("Limit points to calibration window? [Y/n]: ", default=True)
+
+    print()
+    print("Summary")
+    print(f"  plot location: {pic_dir}")
+    print(f"  color: {color or 'auto'}")
+    print(f"  tick coordinates: {ticks or 'OCR auto'}")
+    print(f"  axis values: {axis_values or 'OCR auto'}")
+    print(f"  output directory: {output_dir or 'image folder'}")
+    print(f"  normalize y: {'yes' if normalize_y else 'no'}")
+    print(f"  limit to calibration: {'yes' if limit_to_calibration else 'no'}")
+    print()
+
+    return {
+        "pic_dir": pic_dir,
+        "color": color,
+        "ticks": ticks,
+        "axis_values": axis_values,
+        "output_dir": output_dir or None,
+        "normalize_y": normalize_y,
+        "limit_to_calibration": limit_to_calibration,
+    }
+
+
+def _prompt_yes_no(prompt: str, default: bool) -> bool:
+    while True:
+        value = input(prompt).strip().lower()
+        if not value:
+            return default
+        if value in {"y", "yes"}:
+            return True
+        if value in {"n", "no"}:
+            return False
+        print("Please answer y or n.")
+
+
+def _clean_input(value: str) -> str:
+    return value.strip().strip('"').strip("'")
 
 
 if __name__ == "__main__":

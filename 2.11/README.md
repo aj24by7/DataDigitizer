@@ -12,25 +12,25 @@ Double-clicking the built executable also launches the GUI.
 
 ## Run CLI
 
-Interactive prompt:
+Function-call command from the `2.11` folder:
 
 ```powershell
-py 2.11.py
+py 2.11.py "digitizer_cli(pic_dir='C:/path/to/plot.png', output_dir='')"
 ```
 
-Then fill in the fields you want:
+Full manual call:
 
-```text
-Plot location:
-Color RGB [blank/null = auto]:
-Tick coordinates [blank/null = OCR]:
-Xmin Xmax Ymin Ymax [blank/null = OCR]:
-Output directory [blank = image folder]:
+```powershell
+py 2.11.py "digitizer_cli(pic_dir='C:/path/to/plot.png', color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir='C:/path/to/output')"
 ```
 
-Press Enter at the ready prompt to run.
+Blank optional slots use auto/default behavior:
 
-One-line command:
+```powershell
+py 2.11.py "digitizer_cli(pic_dir='C:/path/to/plot.png', , , , output_dir='')"
+```
+
+One-line flag command still works:
 
 ```powershell
 py digitizer_2_11.py cli --pic-dir path\to\plot.png --color 255,0,0 --ticks "[10,200],[500,200],[10,200],[10,20]" --axis-values 0,10,0,100
@@ -43,6 +43,14 @@ Inputs:
 - `--ticks`: four pixel points in `x_min,x_max,y_min,y_max` order; omit or pass `null` to use OCR axis detection plus coordinate-mediated calibration.
 - `--axis-values`: `xmin,xmax,ymin,ymax`; omit or pass `null` to use OCR axis detection.
 - `--output-dir`: output folder; defaults to the image folder.
+
+Function-call inputs:
+
+- `pic_dir`: required path to the image file.
+- `color`: RGB tuple such as `(255,0,0)`; omit, leave blank, or pass `null` to use auto color selection.
+- `tick_setting`: four pixel points in `x_min,x_max,y_min,y_max` order; omit, leave blank, or pass `null` to use OCR axis detection plus coordinate-mediated calibration.
+- `axis_values`: `(xmin,xmax,ymin,ymax)`; omit, leave blank, or pass `null` to use OCR axis detection.
+- `output_dir`: output folder; blank defaults to the image folder.
 
 Outputs:
 

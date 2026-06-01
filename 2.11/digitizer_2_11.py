@@ -91,8 +91,11 @@ def print_help() -> None:
                 "Run CLI digitization:",
                 "  DataDigitizer-2.11.exe cli --pic-dir plot.png --color 255,0,0 --ticks \"[10,200],[500,200],[10,200],[10,20]\" --axis-values 0,10,0,100",
                 "",
-                "Run interactive CLI wizard:",
-                "  DataDigitizer-2.11.exe interactive",
+                "Run function-call CLI digitization:",
+                "  DataDigitizer-2.11.exe \"digitizer_cli(pic_dir='C:/plots/example.png', output_dir='C:/plots/out')\"",
+                "",
+                "Run function-call CLI with manual color, ticks, and axis values:",
+                "  DataDigitizer-2.11.exe \"digitizer_cli(pic_dir='C:/plots/example.png', color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir='C:/plots/out')\"",
                 "",
                 "Show CLI options:",
                 "  DataDigitizer-2.11.exe cli --help",
@@ -102,10 +105,15 @@ def print_help() -> None:
 
 
 def _looks_like_cli_invocation(args: list[str]) -> bool:
+    joined = " ".join(args).strip()
+    if joined.startswith("digitizer_cli("):
+        return True
     cli_flags = {
         "--pic-dir",
         "--color",
         "--ticks",
+        "--tick-setting",
+        "--tick-coordinates",
         "--axis-values",
         "--output-dir",
         "--normalize-y",

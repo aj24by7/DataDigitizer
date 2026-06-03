@@ -1,3 +1,31 @@
+# Data Digitizer
+
+## Windows 11 No-Code Download
+
+For a normal Windows 11 computer, use the 2.11 Windows release instead of cloning the code:
+
+https://github.com/aj24by7/DataDigitizer/releases/tag/v2.11
+
+Download:
+
+```text
+DataDigitizer-2.11-Windows11.zip
+```
+
+Extract the ZIP, then double-click:
+
+```text
+Install-Windows11.bat
+```
+
+This installs self-contained desktop shortcuts for:
+
+- `Digitizer`
+- `AccuracyTester`
+- `DataDigitizer CLI`
+
+No Python, VS Code, Tesseract install, or command-line setup is required for normal app use. The older 2.10 source documentation is preserved below.
+
 # Data Digitizer 2.10
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)

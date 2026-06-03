@@ -1,0 +1,9 @@
+PyInstaller>=6.0
+PyQt6
+numpy
+pillow
+pytesseract
+openpyxl
+pandas
+matplotlib
+tkinterdnd2

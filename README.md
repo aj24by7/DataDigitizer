@@ -12,6 +12,8 @@ Download:
 DataDigitizer-2.11-Windows11.zip
 ```
 
+Do not use GitHub's green **Code** -> **Download ZIP** button for normal installation. That downloads source code. If someone does that anyway, the Windows installer can now download the missing `.exe` files from the official release when it runs.
+
 Extract the ZIP, then double-click:
 
 ```text

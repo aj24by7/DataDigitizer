@@ -9,6 +9,16 @@ You do not need to use GitHub Desktop.
 
 The apps are self-contained exe files.
 
+IMPORTANT DOWNLOAD NOTE
+
+The easiest and safest download is the release ZIP:
+
+DataDigitizer-2.11-Windows11.zip
+
+Do not use the green Code button unless you know what source code is.
+
+If you accidentally downloaded a folder named DataDigitizer-main, the installer can now fix that by downloading the missing exe files from the official GitHub release. The computer must be connected to the internet.
+
 
 OPTION A - EASIEST INSTALL
 
@@ -29,6 +39,8 @@ OPTION A - EASIEST INSTALL
 8. If Windows asks for permission, click Run.
 
 9. Wait for the installer to say Data Digitizer 2.11 installed successfully.
+
+If it says it is downloading digitizer.exe, accuracytester.exe, or DataDigitizer-2.11.exe, let it finish. That means you opened the installer from the source-code folder, and it is automatically fixing the missing files.
 
 10. Close the installer window.
 

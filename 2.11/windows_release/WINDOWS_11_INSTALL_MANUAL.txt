@@ -7,44 +7,38 @@ You do not need VS Code.
 You do not need to install Tesseract.
 You do not need to use GitHub Desktop.
 
-The apps are self-contained exe files.
+The easiest installer is:
 
-IMPORTANT DOWNLOAD NOTE
+DataDigitizer-2.11-Windows11-Installer.exe
 
-The easiest and safest download is the release ZIP:
+It opens a small installer window with a progress bar. It installs:
 
-DataDigitizer-2.11-Windows11.zip
-
-Do not use the green Code button unless you know what source code is.
-
-If you accidentally downloaded a folder named DataDigitizer-main, the installer can now fix that by downloading the missing exe files from the official GitHub release. The computer must be connected to the internet.
+- Digitizer
+- AccuracyTester
+- DataDigitizer CLI
 
 
 OPTION A - EASIEST INSTALL
 
-1. Download DataDigitizer-2.11-Windows11.zip from the GitHub release page.
+1. Download DataDigitizer-2.11-Windows11-Installer.exe from the GitHub release page.
 
 2. Open your Downloads folder.
 
-3. Right-click DataDigitizer-2.11-Windows11.zip.
+3. Double-click DataDigitizer-2.11-Windows11-Installer.exe.
 
-4. Click Extract All.
+4. If Windows shows "Windows protected your PC", click More info.
 
-5. Click Extract.
+5. Click Run anyway.
 
-6. Open the extracted folder.
+6. The Data Digitizer installer window opens.
 
-7. Double-click Install-Windows11.bat.
+7. Click Install.
 
-8. If Windows asks for permission, click Run.
+8. Wait for the progress bar to finish.
 
-9. Wait for the installer to say Data Digitizer 2.11 installed successfully.
+9. Click Close.
 
-If it says it is downloading digitizer.exe, accuracytester.exe, or DataDigitizer-2.11.exe, let it finish. That means you opened the installer from the source-code folder, and it is automatically fixing the missing files.
-
-10. Close the installer window.
-
-11. Look on your Desktop.
+10. Look on your Desktop.
 
 You should now see:
 
@@ -55,11 +49,30 @@ You should now see:
 Double-click Digitizer to open the normal app.
 
 
-OPTION B - NO INSTALLER, JUST RUN THE EXE
+OPTION B - ZIP DOWNLOAD
+
+1. Download DataDigitizer-2.11-Windows11.zip from the GitHub release page.
+
+2. Right-click the ZIP file.
+
+3. Click Extract All.
+
+4. Click Extract.
+
+5. Open the extracted folder.
+
+6. Double-click DataDigitizer-2.11-Windows11-Installer.exe.
+
+7. Click Install.
+
+If you accidentally double-click Install-Windows11.bat, it will open the same installer window when the installer exe is present.
+
+
+OPTION C - NO INSTALLER, JUST RUN THE APP
 
 1. Download DataDigitizer-2.11-Windows11.zip.
 
-2. Right-click the zip file.
+2. Right-click the ZIP file.
 
 3. Click Extract All.
 
@@ -68,11 +81,6 @@ OPTION B - NO INSTALLER, JUST RUN THE EXE
 5. Double-click digitizer.exe.
 
 That opens the normal Digitizer app.
-
-You can also double-click:
-
-- accuracytester.exe
-- DataDigitizer-2.11.exe
 
 
 HOW TO PIN TO TASKBAR
@@ -100,7 +108,7 @@ If you see "Windows protected your PC":
 
 If the file will not open after download:
 
-1. Right-click the zip file or exe file.
+1. Right-click the exe or zip file.
 
 2. Click Properties.
 
@@ -113,6 +121,9 @@ If the file will not open after download:
 
 WHAT EACH FILE DOES
 
+DataDigitizer-2.11-Windows11-Installer.exe
+Recommended installer. It opens a small installer window with a progress bar.
+
 digitizer.exe
 Normal app. Double-click this for the graph digitizer.
 
@@ -123,7 +134,7 @@ DataDigitizer-2.11.exe
 Command-line version for advanced users.
 
 Install-Windows11.bat
-Creates Desktop and Start Menu shortcuts.
+Fallback launcher. Normal users should use DataDigitizer-2.11-Windows11-Installer.exe.
 
 
 CLI EXAMPLE

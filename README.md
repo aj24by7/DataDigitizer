@@ -1,32 +1,94 @@
 # Data Digitizer
 
-## Windows 11 No-Code Download
+Data Digitizer converts graph images into numeric data points and exports CSV files plus overlay images.
 
-For a normal Windows 11 computer, use the 2.11 Windows release instead of cloning the code:
+## Windows 11 Download
+
+For a normal Windows 11 computer, do not clone the code. Use the ready-to-run Windows release:
 
 https://github.com/aj24by7/DataDigitizer/releases/tag/v2.11
 
-Download:
-
-```text
-DataDigitizer-2.11-Windows11.zip
-```
-
-Do not use GitHub's green **Code** -> **Download ZIP** button for normal installation. That downloads source code. If someone does that anyway, the Windows installer can now download the missing `.exe` files from the official release when it runs.
-
-Download the installer exe and double-click:
+Recommended download:
 
 ```text
 DataDigitizer-2.11-Windows11-Installer.exe
 ```
 
-Or download the ZIP, extract it, and double-click the same installer exe inside the extracted folder. This installs self-contained desktop shortcuts for:
+Double-click it, click **Install**, and it creates Desktop and Start Menu shortcuts for:
 
 - `Digitizer`
 - `AccuracyTester`
 - `DataDigitizer CLI`
 
-No Python, VS Code, Tesseract install, or command-line setup is required for normal app use. The older 2.10 source documentation is preserved below.
+No Python, VS Code, Tesseract install, or command-line setup is required for normal app use.
+
+If Windows shows **Windows protected your PC**, click **More info** and then **Run anyway**. This happens because the installer is not code-signed with a paid certificate yet.
+
+Do not use GitHub's green **Code** -> **Download ZIP** button for normal installation. That downloads source code, not the normal installer.
+
+## Windows 11 Install Steps
+
+1. Open the release page:
+
+   https://github.com/aj24by7/DataDigitizer/releases/tag/v2.11
+
+2. Download `DataDigitizer-2.11-Windows11-Installer.exe`.
+
+3. Double-click the downloaded file.
+
+4. Click **Install** in the installer window.
+
+5. Open `Digitizer` from the Desktop shortcut.
+
+6. To pin it to the taskbar, open Digitizer, right-click its taskbar icon, and click **Pin to taskbar**.
+
+## CLI Quick Start
+
+Open PowerShell or the VS Code terminal from the repo folder:
+
+```powershell
+cd C:\Users\User\Downloads\CROI
+```
+
+Basic CLI command:
+
+```powershell
+py 2.11.py 'digitizer_cli(pic_dir="C:\Users\User\Pictures\Screenshots\Example 2.png", output_dir="C:\Users\User\Downloads\testcli")'
+```
+
+Auto mode with blank optional fields:
+
+```powershell
+py 2.11.py 'digitizer_cli(pic_dir="C:\Users\User\Pictures\Screenshots\Example 2.png", , , , output_dir="C:\Users\User\Downloads\testcli")'
+```
+
+Manual mode:
+
+```powershell
+py 2.11.py 'digitizer_cli(pic_dir="C:\Users\User\Pictures\Screenshots\Example 2.png", color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir="C:\Users\User\Downloads\testcli")'
+```
+
+Path tip:
+
+1. Right-click the graph image in File Explorer.
+2. Click **Copy as path**.
+3. Paste the quoted path after `pic_dir=`.
+
+The CLI supports normal Windows backslash paths when the image/output paths are inside double quotes and the whole function call is inside single quotes.
+
+CLI output:
+
+```text
+Pipeline done. Output data to C:\...\Example 2_digitized_points.csv. Points: 201.
+Overlapping plot: C:\...\Example 2_digitized_overlay.png
+```
+
+It creates:
+
+- `<image>_digitized_points.csv`
+- `<image>_digitized_overlay.png`
+
+The older 2.10 source documentation is preserved below.
 
 # Data Digitizer 2.10
 

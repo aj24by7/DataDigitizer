@@ -134,8 +134,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Digitize an image from the terminal using the existing Data Digitizer algorithms.",
         epilog=(
             "Function-call mode:\n"
-            "  py 2.11.py \"digitizer_cli(pic_dir='C:/plots/example.png', output_dir='C:/plots/out')\"\n"
-            "  py 2.11.py \"digitizer_cli(pic_dir='C:/plots/example.png', , ([10,200],[500,200],[10,200],[10,20]), (0,10,0,100), output_dir='C:/plots/out')\""
+            "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'\n"
+            "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", , ([10,200],[500,200],[10,200],[10,20]), (0,10,0,100), output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -182,13 +182,13 @@ def print_function_call_usage() -> None:
                 "Data Digitizer 2.11 CLI",
                 "",
                 "Use one quoted function-call line:",
-                "  py 2.11.py \"digitizer_cli(pic_dir='C:/plots/example.png', output_dir='C:/plots/out')\"",
+                "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
                 "",
                 "Full manual inputs:",
-                "  py 2.11.py \"digitizer_cli(pic_dir='C:/plots/example.png', color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir='C:/plots/out')\"",
+                "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
                 "",
                 "Blank color, ticks, axis values, or output_dir use auto/default behavior:",
-                "  py 2.11.py \"digitizer_cli(pic_dir='C:/plots/example.png', , , , output_dir='')\"",
+                "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", , , , output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
             ]
         )
     )

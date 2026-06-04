@@ -141,7 +141,13 @@ CLI EXAMPLE
 
 Open PowerShell in the extracted folder and run:
 
-.\DataDigitizer-2.11.exe "digitizer_cli(pic_dir='C:/path/to/plot.png', output_dir='')"
+.\DataDigitizer-2.11.exe 'digitizer_cli(pic_dir="C:\Users\User\Pictures\Screenshots\Example 2.png", output_dir="C:\Users\User\Downloads\testcli")'
+
+You can copy the image path from File Explorer:
+
+1. Right-click the image.
+2. Click Copy as path.
+3. Paste it after pic_dir=.
 
 The CLI prints something like:
 

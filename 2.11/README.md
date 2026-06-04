@@ -12,22 +12,28 @@ Double-clicking the built executable also launches the GUI.
 
 ## Run CLI
 
-Function-call command from the `2.11` folder:
+From the repo root:
 
 ```powershell
-py 2.11.py "digitizer_cli(pic_dir='C:/path/to/plot.png', output_dir='')"
+cd C:\Users\User\Downloads\CROI
+```
+
+Basic command:
+
+```powershell
+py 2.11.py 'digitizer_cli(pic_dir="C:\Users\User\Pictures\Screenshots\Example 2.png", output_dir="C:\Users\User\Downloads\testcli")'
 ```
 
 Full manual call:
 
 ```powershell
-py 2.11.py "digitizer_cli(pic_dir='C:/path/to/plot.png', color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir='C:/path/to/output')"
+py 2.11.py 'digitizer_cli(pic_dir="C:\Users\User\Pictures\Screenshots\Example 2.png", color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir="C:\Users\User\Downloads\testcli")'
 ```
 
 Blank optional slots use auto/default behavior:
 
 ```powershell
-py 2.11.py "digitizer_cli(pic_dir='C:/path/to/plot.png', , , , output_dir='')"
+py 2.11.py 'digitizer_cli(pic_dir="C:\Users\User\Pictures\Screenshots\Example 2.png", , , , output_dir="C:\Users\User\Downloads\testcli")'
 ```
 
 One-line flag command still works:
@@ -51,6 +57,14 @@ Function-call inputs:
 - `tick_setting`: four pixel points in `x_min,x_max,y_min,y_max` order; omit, leave blank, or pass `null` to use OCR axis detection plus coordinate-mediated calibration.
 - `axis_values`: `(xmin,xmax,ymin,ymax)`; omit, leave blank, or pass `null` to use OCR axis detection.
 - `output_dir`: output folder; blank defaults to the image folder.
+
+File Explorer path copy:
+
+1. Right-click an image in File Explorer.
+2. Click **Copy as path**.
+3. Paste the quoted path after `pic_dir=`.
+
+The CLI supports normal Windows backslash paths when they are inside double quotes and the whole function call is inside single quotes.
 
 Outputs:
 

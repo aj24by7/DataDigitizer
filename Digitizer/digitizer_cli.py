@@ -130,12 +130,17 @@ def interactive_main() -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="Digitizer cli",
-        description="Digitize an image from the terminal using the existing Data Digitizer algorithms.",
+        prog="digitizer",
+        description=(
+            "Digitize a plot image into a CSV (+ overlay). With just an image path it "
+            "auto-detects the curve color and the axes (OCR) and saves to your Downloads folder."
+        ),
         epilog=(
-            "Function-call mode:\n"
-            "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'\n"
-            "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", , ([10,200],[500,200],[10,200],[10,20]), (0,10,0,100), output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'"
+            "Examples:\n"
+            "  py digitizer.py plot2.png\n"
+            "  py digitizer.py plot2.png --color 255,0,0 --axis 0,10,0,100\n"
+            "  py digitizer.py plot2.png --ticks \"[10,200],[500,200],[10,200],[10,20]\" --out C:\\out\n"
+            "A bare filename is also looked up in your Downloads folder."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -154,9 +159,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--axis-values",
+        "--axis",
+        dest="axis_values",
         help="Axis values as 'xmin,xmax,ymin,ymax'. If omitted, OCR axis detection is used.",
     )
-    parser.add_argument("--output-dir", help="Output directory. Defaults to the image directory.")
+    parser.add_argument(
+        "--output-dir",
+        "--out",
+        "-o",
+        dest="output_dir",
+        help="Output folder. Default: your Downloads folder.",
+    )
     parser.add_argument("--normalize-y", action="store_true", help="Add a y_norm column to the CSV.")
     parser.add_argument(
         "--limit-to-calibration",
@@ -194,6 +207,38 @@ def print_function_call_usage() -> None:
     )
 
 
+def print_template() -> None:
+    """Print a ready-to-copy digitizer_cli(...) line that users can edit."""
+
+    print(
+        "\n".join(
+            [
+                "Function-call template - copy a line below, then change the values.",
+                "Keep the single quotes around the whole digitizer_cli(...) call.",
+                "",
+                "Minimal (auto-detect the color, OCR the axes, save to Downloads):",
+                "  py digitizer.py 'digitizer_cli(pic_dir=\"plot2.png\")'",
+                "",
+                "Full template (every option - delete the parts you don't need):",
+                "  py digitizer.py 'digitizer_cli(pic_dir=\"plot2.png\", color=(255,0,0), "
+                "axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), "
+                "output_dir=\"C:/Users/User/Downloads/out\", normalize_y=False, "
+                "limit_to_calibration=True, json=False)'",
+                "",
+                "What each value means:",
+                "  pic_dir=\"...\"               required - image file (a bare name is looked up in Downloads)",
+                "  color=(R,G,B)               curve color, each 0-255; omit to auto-detect",
+                "  axis_values=(x0,x1,y0,y1)   axis numbers (xmin,xmax,ymin,ymax); omit to read by OCR",
+                "  tick_setting=([x,y] x4)     tick pixel points x_min,x_max,y_min,y_max; omit for OCR",
+                "  output_dir=\"...\"            folder to save into; omit for Downloads",
+                "  normalize_y=True            add a 0-1 normalized Y column to the CSV",
+                "  limit_to_calibration=False  also keep points outside the calibration box",
+                "  json=True                   print the full result details as JSON",
+            ]
+        )
+    )
+
+
 def is_function_call_syntax(argv: Sequence[str]) -> bool:
     return bool(re.match(rf"^\s*{CALL_NAME}\s*\(", " ".join(argv).strip()))
 
@@ -201,6 +246,7 @@ def is_function_call_syntax(argv: Sequence[str]) -> bool:
 def _run_function_call(argv: Sequence[str]) -> int:
     try:
         kwargs = parse_function_call(" ".join(argv))
+        as_json = bool(kwargs.pop("_json", False))
         result = digitizer_cli(**kwargs)
     except DigitizerCliError as exc:
         print(f"digitizer error: {exc}", file=sys.stderr)
@@ -209,8 +255,10 @@ def _run_function_call(argv: Sequence[str]) -> int:
         print(f"unexpected error: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Pipeline done. Output data to {result.csv_path}. Points: {result.point_count}.")
-    print(f"Overlapping plot: {result.overlay_path}")
+    if as_json:
+        print(result.to_json())
+    else:
+        _print_standard_result(result)
     return 0
 
 
@@ -250,6 +298,8 @@ def parse_function_call(call_text: str) -> dict[str, Any]:
         "output_dir": values.get("output_dir"),
         "normalize_y": _coerce_bool(values.get("normalize_y"), default=False),
         "limit_to_calibration": _coerce_bool(values.get("limit_to_calibration"), default=True),
+        # Not a digitize_image argument; _run_function_call pops it to pick the output style.
+        "_json": _coerce_bool(values.get("json"), default=False),
     }
 
 
@@ -341,8 +391,14 @@ def _canonical_call_name(name: str) -> str | None:
         "bounds": "axis_values",
         "output_dir": "output_dir",
         "out_dir": "output_dir",
+        "out": "output_dir",
         "normalize_y": "normalize_y",
+        "normalize": "normalize_y",
         "limit_to_calibration": "limit_to_calibration",
+        "limit": "limit_to_calibration",
+        "json": "json",
+        "as_json": "json",
+        "print_json": "json",
     }
     return aliases.get(normalized)
 

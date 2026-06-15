@@ -54,7 +54,7 @@ def digitize_image(
     _ = app  # Keep a live reference for Qt object lifetime.
 
     image_path = _resolve_image_path(pic_dir)
-    out_dir = _resolve_output_dir(output_dir, image_path)
+    out_dir = _resolve_output_dir(output_dir)
 
     image = QtGui.QImage(str(image_path))
     if image.isNull():
@@ -123,18 +123,33 @@ def _ensure_qt_app() -> QtWidgets.QApplication:
 
 
 def _resolve_image_path(pic_dir: str | Path) -> Path:
-    path = Path(pic_dir).expanduser().resolve()
-    if not path.exists():
-        raise DigitizerCliError(f"Image path does not exist: {path}")
-    if path.is_dir():
+    raw = Path(str(pic_dir)).expanduser()
+    candidates = [raw]
+    # A bare filename (e.g. "plot2.png") is also looked up in the Downloads folder,
+    # so a short one-liner works for images saved there without the full path.
+    if len(raw.parts) == 1:
+        candidates.append(_downloads_dir() / raw.name)
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.is_file():
+            return resolved
+    first = candidates[0].resolve()
+    if first.is_dir():
         raise DigitizerCliError("pic_dir must point to an image file, not a directory.")
-    return path
+    locations = " or ".join(str(c) for c in candidates)
+    raise DigitizerCliError(f"Image file not found: {locations}")
 
 
-def _resolve_output_dir(output_dir: str | Path | None, image_path: Path) -> Path:
-    out_dir = Path(output_dir).expanduser().resolve() if output_dir else image_path.parent
+def _resolve_output_dir(output_dir: str | Path | None) -> Path:
+    # Default output goes to Downloads so a no-options run lands somewhere obvious.
+    out_dir = Path(str(output_dir)).expanduser().resolve() if output_dir else _downloads_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
+
+
+def _downloads_dir() -> Path:
+    downloads = Path.home() / "Downloads"
+    return downloads if downloads.is_dir() else Path.home()
 
 
 def _normalize_color(color_rgb: Sequence[int] | ColorRgb) -> ColorRgb:

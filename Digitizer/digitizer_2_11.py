@@ -22,6 +22,11 @@ def main(argv: list[str] | None = None) -> int:
         from digitizer_cli import interactive_main
 
         return interactive_main()
+    if command in {"template", "--template"}:
+        from digitizer_cli import print_template
+
+        print_template()
+        return 0
     if command in {"--help", "-h", "help"}:
         print_help()
         return 0
@@ -107,20 +112,23 @@ def print_help() -> None:
             [
                 "Data Digitizer 2.12",
                 "",
-                "Double-click or run with no arguments:",
-                "  Digitizer.exe",
+                "Open the graphical app:",
+                "  double-click Digitizer.exe   (or from source: py digitizer_2_11.py)",
                 "",
-                "Run CLI digitization:",
-                "  py digitizer.py cli --pic-dir plot.png --color 255,0,0 --ticks \"[10,200],[500,200],[10,200],[10,20]\" --axis-values 0,10,0,100",
+                "Digitize one image from the command line (saves CSV + overlay to Downloads):",
+                "  py digitizer.py plot2.png",
                 "",
-                "Run function-call CLI digitization:",
-                "  py digitizer.py \"digitizer_cli(pic_dir='C:/plots/example.png', output_dir='C:/plots/out')\"",
+                "Add detail as needed:",
+                "  py digitizer.py plot2.png --color 255,0,0 --axis 0,10,0,100 --out C:/out --normalize-y",
                 "",
-                "Run function-call CLI with manual color, ticks, and axis values:",
-                "  py digitizer.py \"digitizer_cli(pic_dir='C:/plots/example.png', color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir='C:/plots/out')\"",
+                "Function-call / template style (one quoted line, copy and edit it):",
+                "  py digitizer.py 'digitizer_cli(pic_dir=\"plot2.png\", color=(255,0,0), axis_values=(0,10,0,100))'",
                 "",
-                "Show CLI options:",
-                "  py digitizer.py cli --help",
+                "Print a fill-in-the-blank template with every option:",
+                "  py digitizer.py template",
+                "",
+                "Full CLI options:",
+                "  py digitizer.py --help",
             ]
         )
     )
@@ -137,7 +145,10 @@ def _looks_like_cli_invocation(args: list[str]) -> bool:
         "--tick-setting",
         "--tick-coordinates",
         "--axis-values",
+        "--axis",
         "--output-dir",
+        "--out",
+        "-o",
         "--normalize-y",
         "--limit-to-calibration",
         "--no-limit-to-calibration",
@@ -145,7 +156,13 @@ def _looks_like_cli_invocation(args: list[str]) -> bool:
     }
     if any(arg.split("=", 1)[0] in cli_flags for arg in args):
         return True
-    return bool(args and Path(args[0]).expanduser().exists())
+    if args:
+        first = Path(args[0]).expanduser()
+        if first.exists():
+            return True
+        if len(first.parts) == 1 and (Path.home() / "Downloads" / first.name).is_file():
+            return True
+    return False
 
 
 def _user_app_data_dir() -> Path:

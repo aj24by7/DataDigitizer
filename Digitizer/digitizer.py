@@ -2,20 +2,60 @@ from __future__ import annotations
 
 import sys
 
-from digitizer_2_11 import configure_runtime_paths, main
+from digitizer_2_11 import configure_runtime_paths
+
+
+USAGE = r"""Data Digitizer 2.12 - command line
+
+Digitize one image. With no options it auto-detects the curve color and the axes
+(via OCR) and saves the CSV + overlay to your Downloads folder:
+
+  py digitizer.py plot2.png
+
+A bare filename is searched for in the current folder and in Downloads, so the line
+above works as long as plot2.png is in either place.
+
+Add any of these for more control:
+
+  --color  R,G,B        curve color (default: auto-detected)
+  --axis   xmin,xmax,ymin,ymax   axis values (default: read by OCR)
+  --ticks  [x,y],[x,y],[x,y],[x,y]   tick pixel points: x_min,x_max,y_min,y_max
+  --out    FOLDER       where to save output (default: Downloads)
+  --normalize-y         add a 0-1 normalized Y column to the CSV
+  --json                print the result details as JSON
+
+Examples:
+
+  py digitizer.py plot2.png --color 255,0,0 --axis 0,10,0,100
+  py digitizer.py "C:\Users\User\Desktop\graph.png" --out "C:\Users\User\Desktop\out"
+
+Function-call / template style (one quoted line) also works. This is the form to
+copy-paste and edit when you want to set several things at once:
+
+  py digitizer.py 'digitizer_cli(pic_dir="plot2.png", color=(255,0,0), axis_values=(0,10,0,100))'
+
+Print a fill-in-the-blank template with every option:
+
+  py digitizer.py template
+
+To open the graphical app instead:
+
+  py digitizer_2_11.py
+"""
 
 
 if __name__ == "__main__":
     configure_runtime_paths()
     args = sys.argv[1:]
-    if len(sys.argv) == 1:
-        from digitizer_cli import print_function_call_usage
-
-        print_function_call_usage()
+    if not args or args[0] in {"-h", "--help", "help"}:
+        print(USAGE)
         raise SystemExit(0)
-    if len(args) == 1 or args[0].startswith("digitizer_cli"):
-        from digitizer_cli import is_function_call_syntax, main as cli_main
+    if args[0] in {"template", "--template"}:
+        from digitizer_cli import print_template
 
-        if is_function_call_syntax(args):
-            raise SystemExit(cli_main(args))
-    raise SystemExit(main(args))
+        print_template()
+        raise SystemExit(0)
+
+    from digitizer_cli import main as cli_main
+
+    raise SystemExit(cli_main(args))

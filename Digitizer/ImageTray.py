@@ -9,6 +9,10 @@ class ImageTray(QtWidgets.QWidget):
     image_clicked = QtCore.pyqtSignal(int, int)
     mask_rect_created = QtCore.pyqtSignal(float, float, float, float)
     mask_remove_requested = QtCore.pyqtSignal(int, int)
+    # Emitted (left, top, right, bottom in image pixels) when the user finishes
+    # dragging an edge of the dashed green calibration box, so the window can
+    # update the stored calibration that export reads.
+    calibration_box_changed = QtCore.pyqtSignal(int, int, int, int)
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
@@ -188,6 +192,12 @@ class ImageTray(QtWidgets.QWidget):
         if self._dragging_line is not None:
             self._dragging_line = None
             self.unsetCursor()
+            bounds = self._box_bounds()
+            if bounds is not None:
+                left, right, top, bottom = bounds
+                self.calibration_box_changed.emit(
+                    int(round(left)), int(round(top)), int(round(right)), int(round(bottom))
+                )
 
     def _fit_rect(self, image_size: QtCore.QSize, bounds: QtCore.QRect) -> QtCore.QRectF:
         img_w = image_size.width()

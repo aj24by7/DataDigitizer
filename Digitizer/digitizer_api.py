@@ -43,7 +43,7 @@ def digitize_image(
     normalize_y: bool = False,
     limit_to_calibration: bool = True,
 ) -> DigitizerOutputs:
-    """Digitize a plot image using the existing 2.11 GUI algorithms.
+    """Digitize a plot image using the existing GUI algorithms.
 
     `tick_points` order is x_min, x_max, y_min, y_max in image pixel
     coordinates. `axis_values` order is x_min, x_max, y_min, y_max in plot

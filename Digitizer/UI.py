@@ -249,14 +249,17 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_place_points_limit = self.place_menu.addAction("Limit to Calibration Window")
         self.act_place_points_limit.setCheckable(True)
         self.act_place_points_limit.setChecked(False)
+        self.act_place_points_limit.setVisible(False)  # hidden in 2.12 (state kept for back-compat)
         self.tools_menu.addMenu(self.place_menu)
         self.calibration_menu = QtWidgets.QMenu("Calibration", self)
         self.act_calib_manual = self.calibration_menu.addAction("Manual Calibration")
         self.act_calib_coord = self.calibration_menu.addAction("Coordinate-Mediated Calibration")
         self.act_calib_line = self.calibration_menu.addAction("Line-Mediated Calibration")
+        self.act_calib_line.setVisible(False)  # hidden in 2.12
         self.tools_menu.addMenu(self.calibration_menu)
         self.act_interpolate = self.tools_menu.addAction("Interpolation")
         self.act_interpolate.setCheckable(True)
+        self.act_interpolate.setVisible(False)  # hidden in 2.12
         self.act_pick_color = self.tools_menu.addAction("Pick Color")
         self.act_pick_color.setCheckable(True)
         self.tools_button.setMenu(self.tools_menu)
@@ -268,6 +271,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.filters_menu = QtWidgets.QMenu(self)
         self.act_chroma_filter = self.filters_menu.addAction("Chroma Filter")
         self.act_chroma_filter.setCheckable(True)
+        self.act_chroma_filter.setVisible(False)  # hidden in 2.12
         self.axis_menu = QtWidgets.QMenu("Axis Scale Detection", self)
         self.act_axis_run = self.axis_menu.addAction("Run Axis Detection")
         self.axis_menu.addSeparator()
@@ -299,10 +303,12 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.export_csv_menu = QtWidgets.QMenu("Export CSV", self)
         self.act_export_csv_raw = self.export_csv_menu.addAction("Raw values")
         self.act_export_csv_norm = self.export_csv_menu.addAction("Y normalized (0-1)")
+        self.act_export_csv_norm.setVisible(False)  # hidden in 2.12
         self.export_menu.addMenu(self.export_csv_menu)
         self.export_excel_menu = QtWidgets.QMenu("Export Excel", self)
         self.act_export_excel_raw = self.export_excel_menu.addAction("Raw values")
         self.act_export_excel_norm = self.export_excel_menu.addAction("Y normalized (0-1)")
+        self.act_export_excel_norm.setVisible(False)  # hidden in 2.12
         self.export_menu.addMenu(self.export_excel_menu)
         self.export_menu.addSeparator()
         self.export_selection_menu = PersistentSelectionMenu("Colors to Export", self.export_menu)
@@ -310,6 +316,29 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.export_menu.addMenu(self.export_selection_menu)
         self.export_button.setMenu(self.export_menu)
         top_bar.addWidget(self.export_button)
+
+        # Give the dropdown buttons a consistent look with a properly aligned
+        # caret. The native menu-indicator was being clipped/misaligned, so we
+        # hide it and render the caret as part of the button text instead.
+        toolbar_button_style = (
+            "QToolButton {"
+            " padding: 3px 9px;"
+            " border: 1px solid #c0c4c8;"
+            " border-radius: 4px;"
+            " background: #f8f9fa;"
+            "}"
+            "QToolButton:hover { background: #eef1f3; }"
+            "QToolButton:pressed { background: #e3e6e8; }"
+            "QToolButton::menu-indicator { image: none; width: 0px; }"
+        )
+        for _button, _label in (
+            (self.import_button, "Import"),
+            (self.tools_button, "Tools"),
+            (self.filters_button, "Advanced"),
+            (self.export_button, "Export"),
+        ):
+            _button.setText(f"{_label} ▾")  # ▾ = down-caret, always aligned
+            _button.setStyleSheet(toolbar_button_style)
 
         top_bar.addStretch(1)
         layout.addLayout(top_bar)
@@ -345,13 +374,15 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.color_row = QtWidgets.QHBoxLayout()
         self.color_row.setSpacing(6)
         self.selected_color_label = QtWidgets.QLabel("Selected color")
-        self.selected_color_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-        self.color_row.addWidget(self.selected_color_label)
+        self.selected_color_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        self.color_row.addWidget(self.selected_color_label, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.color_slots_widget = QtWidgets.QWidget()
         self.color_slots_layout = QtWidgets.QHBoxLayout(self.color_slots_widget)
         self.color_slots_layout.setContentsMargins(0, 0, 0, 0)
         self.color_slots_layout.setSpacing(4)
-        self.color_row.addWidget(self.color_slots_widget)
+        self.color_row.addWidget(self.color_slots_widget, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.color_row.addStretch(1)
         layout.addLayout(self.color_row)
 
@@ -379,6 +410,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.image_tray.image_clicked.connect(self.on_image_clicked)
         self.image_tray.mask_rect_created.connect(self.on_mask_rect_created)
         self.image_tray.mask_remove_requested.connect(self.on_mask_remove_requested)
+        self.image_tray.calibration_box_changed.connect(self.on_calibration_box_changed)
 
         self.zoom_panel = CursorZoomPanel(central)
         self.zoom_panel.show()
@@ -496,6 +528,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         is_active: bool,
         color: Optional[Tuple[int, int, int]],
         is_add_button: bool = False,
+        selector: str = "QToolButton",
     ) -> str:
         border_color = "#1a7f37" if is_active else "#000000"
         border_width = "2px" if is_active else "1px"
@@ -505,15 +538,16 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             background = f"rgb({color[0]}, {color[1]}, {color[2]})"
         text_color = "#1a7f37" if is_add_button else "#000000"
         return (
-            "QToolButton {"
+            f"{selector} {{"
             f"border: {border_width} solid {border_color};"
             "border-radius: 2px;"
             f"background: {background};"
             f"color: {text_color};"
-            "font-weight: 600;"
-            "font-size: 14px;"
+            "font-weight: 700;"
+            "font-size: 13px;"
             "padding: 0px;"
             "margin: 0px;"
+            "text-align: center;"
             "}"
         )
 
@@ -565,20 +599,21 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             button.setText("")
             button.setStyleSheet(self._slot_button_style(index == self._active_color_index, state.color))
             button.clicked.connect(lambda _checked=False, color_index=index: self._set_active_color_index(color_index))
-            self.color_slots_layout.addWidget(button)
+            self.color_slots_layout.addWidget(button, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
             self._slot_buttons.append(button)
             if index < len(self._color_states) - 1:
                 comma_label = QtWidgets.QLabel(",")
                 comma_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-                self.color_slots_layout.addWidget(comma_label)
+                self.color_slots_layout.addWidget(comma_label, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
 
-        plus_button = QtWidgets.QToolButton()
+        plus_button = QtWidgets.QPushButton("+")
         plus_button.setFixedSize(swatch_size, swatch_size)
-        plus_button.setText("+")
         plus_button.setToolTip("Add color slot")
-        plus_button.setStyleSheet(self._slot_button_style(False, None, is_add_button=True))
+        plus_button.setStyleSheet(
+            self._slot_button_style(False, None, is_add_button=True, selector="QPushButton")
+        )
         plus_button.clicked.connect(self._add_color_slot)
-        self.color_slots_layout.addWidget(plus_button)
+        self.color_slots_layout.addWidget(plus_button, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
 
     def _sync_active_color_actions(self) -> None:
         for action, checked in (
@@ -1269,6 +1304,34 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._manual_stage = 0
         for key in self._manual_points:
             self._manual_points[key] = None
+
+    def on_calibration_box_changed(self, left: int, top: int, right: int, bottom: int) -> None:
+        """Re-store calibration after the user drags the dashed green box.
+
+        The box lives inside ImageTray; previously dragging an edge updated only
+        the overlay, so export kept using the original (pre-drag) calibration.
+        We rebuild axis-aligned tick points from the new box edges so BOTH export
+        paths reflect the drag: the affine mapper (via _get_axis_points) and the
+        box-linear fallback (via _get_calibration_box).
+        """
+        if right <= left or bottom <= top:
+            return
+        box = [(left, top), (right, top), (right, bottom), (left, bottom)]
+        self._calibration_result = CalibrationResult(
+            x_min_point=(left, bottom),
+            x_max_point=(right, bottom),
+            y_min_point=(left, bottom),
+            y_max_point=(left, top),
+            box=box,
+        )
+        self._manual_points = {
+            "x_min": (left, bottom),
+            "x_max": (right, bottom),
+            "y_min": (left, bottom),
+            "y_max": (left, top),
+        }
+        self._calibration_mode = None
+        self.status_label.setText("Calibration box updated. Export will use the new box.")
 
     def start_manual_calibration(self) -> None:
         if self._image is None:

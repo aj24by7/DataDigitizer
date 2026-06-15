@@ -78,7 +78,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 def interactive_main() -> int:
     print()
-    print("Data Digitizer 2.11 Interactive CLI")
+    print("Data Digitizer 2.12 Interactive CLI")
     print("Leave optional fields blank and press Enter to use auto/default behavior.")
     print()
 
@@ -130,12 +130,12 @@ def interactive_main() -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="DataDigitizer-2.11 cli",
+        prog="Digitizer cli",
         description="Digitize an image from the terminal using the existing Data Digitizer algorithms.",
         epilog=(
             "Function-call mode:\n"
-            "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'\n"
-            "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", , ([10,200],[500,200],[10,200],[10,20]), (0,10,0,100), output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'"
+            "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'\n"
+            "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", , ([10,200],[500,200],[10,200],[10,20]), (0,10,0,100), output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -179,16 +179,16 @@ def print_function_call_usage() -> None:
     print(
         "\n".join(
             [
-                "Data Digitizer 2.11 CLI",
+                "Data Digitizer 2.12 CLI",
                 "",
                 "Use one quoted function-call line:",
-                "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
+                "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
                 "",
                 "Full manual inputs:",
-                "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
+                "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
                 "",
                 "Blank color, ticks, axis values, or output_dir use auto/default behavior:",
-                "  py 2.11.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", , , , output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
+                "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", , , , output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
             ]
         )
     )

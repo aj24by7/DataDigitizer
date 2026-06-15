@@ -37,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
 def configure_runtime_paths() -> None:
     """Set writable runtime paths without changing the existing modules."""
 
+    _suppress_subprocess_console()
+
     app_dir = _user_app_data_dir()
     log_dir = app_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -66,6 +68,26 @@ def configure_runtime_paths() -> None:
             pass
 
 
+def _suppress_subprocess_console() -> None:
+    """Prevent bundled console tools (Tesseract, invoked by pytesseract) from
+    briefly flashing a console window when run from the windowed executable."""
+    if sys.platform != "win32":
+        return
+    import subprocess
+
+    if getattr(subprocess, "_digitizer_no_window_patched", False):
+        return
+    create_no_window = 0x08000000  # CREATE_NO_WINDOW
+    original_init = subprocess.Popen.__init__
+
+    def _init(self, *args, **kwargs):
+        kwargs["creationflags"] = kwargs.get("creationflags", 0) | create_no_window
+        original_init(self, *args, **kwargs)
+
+    subprocess.Popen.__init__ = _init
+    subprocess._digitizer_no_window_patched = True
+
+
 def launch_digitizer_gui() -> int:
     from PyQt6 import QtWidgets
 
@@ -73,7 +95,7 @@ def launch_digitizer_gui() -> int:
 
     app = QtWidgets.QApplication.instance()
     if app is None:
-        app = QtWidgets.QApplication(["DataDigitizer-2.11"])
+        app = QtWidgets.QApplication(["Digitizer"])
     window = DigitizerWindow()
     window.show()
     return int(app.exec())
@@ -83,22 +105,22 @@ def print_help() -> None:
     print(
         "\n".join(
             [
-                "Data Digitizer 2.11",
+                "Data Digitizer 2.12",
                 "",
                 "Double-click or run with no arguments:",
-                "  DataDigitizer-2.11.exe",
+                "  Digitizer.exe",
                 "",
                 "Run CLI digitization:",
-                "  DataDigitizer-2.11.exe cli --pic-dir plot.png --color 255,0,0 --ticks \"[10,200],[500,200],[10,200],[10,20]\" --axis-values 0,10,0,100",
+                "  py digitizer.py cli --pic-dir plot.png --color 255,0,0 --ticks \"[10,200],[500,200],[10,200],[10,20]\" --axis-values 0,10,0,100",
                 "",
                 "Run function-call CLI digitization:",
-                "  DataDigitizer-2.11.exe \"digitizer_cli(pic_dir='C:/plots/example.png', output_dir='C:/plots/out')\"",
+                "  py digitizer.py \"digitizer_cli(pic_dir='C:/plots/example.png', output_dir='C:/plots/out')\"",
                 "",
                 "Run function-call CLI with manual color, ticks, and axis values:",
-                "  DataDigitizer-2.11.exe \"digitizer_cli(pic_dir='C:/plots/example.png', color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir='C:/plots/out')\"",
+                "  py digitizer.py \"digitizer_cli(pic_dir='C:/plots/example.png', color=(255,0,0), tick_setting=([10,200],[500,200],[10,200],[10,20]), axis_values=(0,10,0,100), output_dir='C:/plots/out')\"",
                 "",
                 "Show CLI options:",
-                "  DataDigitizer-2.11.exe cli --help",
+                "  py digitizer.py cli --help",
             ]
         )
     )
@@ -129,8 +151,8 @@ def _looks_like_cli_invocation(args: list[str]) -> bool:
 def _user_app_data_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA")
     if base:
-        return Path(base) / "DataDigitizer" / "2.11"
-    return Path.home() / ".datadigitizer" / "2.11"
+        return Path(base) / "DataDigitizer" / "2.12"
+    return Path.home() / ".datadigitizer" / "2.12"
 
 
 def _resolve_tesseract_cmd(bundle_root: Path) -> Path | None:

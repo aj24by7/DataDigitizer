@@ -4,20 +4,30 @@ from pathlib import Path
 
 
 block_cipher = None
-root = Path(SPECPATH).parent
+root = Path(SPECPATH)
 
-datas = [
-    (str(root / "dist" / "digitizer.exe"), "payload"),
-    (str(root / "dist" / "accuracytester.exe"), "payload"),
-    (str(root / "dist" / "DataDigitizer-2.11.exe"), "payload"),
+datas = [(str(root / "version.json"), ".")]
+
+# Tesseract OCR runtime bundled from Digitizer\vendor\tesseract (self-contained OCR).
+vendor_tesseract = root / "vendor" / "tesseract"
+if vendor_tesseract.exists() and any(path.is_file() for path in vendor_tesseract.rglob("*")):
+    datas.append((str(vendor_tesseract), "vendor/tesseract"))
+
+hiddenimports = [
+    "openpyxl",
+    "pytesseract",
+    "PIL.Image",
+    "PIL.ImageEnhance",
+    "PIL.ImageFilter",
+    "PIL.ImageOps",
 ]
 
 a = Analysis(
-    [str(root / "windows_release" / "gui_installer.py")],
+    ["digitizer_desktop.py"],
     pathex=[str(root)],
     binaries=[],
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -37,7 +47,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="DataDigitizer-2.11-Windows11-Installer",
+    name="Digitizer",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

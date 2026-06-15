@@ -1,2 +1,8 @@
 __pycache__/
 *.py[cod]
+*.exe
+build/
+dist/
+vendor/
+logs/
+.venv/

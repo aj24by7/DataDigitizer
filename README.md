@@ -213,7 +213,7 @@ With nothing else, the app automatically:
 2. **detects the axes and tick positions** with OCR (so it reads X min / X max / Y min / Y max straight off the image), and
 3. **writes a CSV of data points plus an overlay PNG** to your **Downloads** folder.
 
-A bare filename like `graph.png` is looked up first in the current folder, then in your Downloads folder — so the one-liner works as long as the image is in either place. On success it prints the CSV path, the overlay path, the number of points, the color it used, and whether OCR was used.
+A bare filename like `graph.png` is looked up first in the current folder, then in your Downloads folder — so the one-liner works as long as the image is in either place. By default it stays quiet: it prints just a success line and the output folder. Add **`--verbose 1`** to see the full detail — the color, pixel coordinates, the OCR readings, the point count, and the **OCR confidence score** (see [Seeing more detail](#seeing-more-detail---verbose)).
 
 > Two other spellings do exactly the same thing: `py digitizer_2_11.py cli graph.png` and `py digitizer_2_11.py digitize graph.png`.
 
@@ -232,6 +232,7 @@ Add any of these to the command for more control:
 | `--normalize-y` | Adds an extra `y_norm` column (Y rescaled to 0–1 over the axis range). | off |
 | `--limit-to-calibration` | Export only points inside the calibration box. **This is the CLI default.** | on |
 | `--no-limit-to-calibration` | Also export points that fall outside the calibration box (matches the GUI default). | not set |
+| `--verbose N` *(`-v`)* | How much to print. `1` (or a bare `-v` / `--verbose`) shows the color, pixel coords, tick→OCR values, point count, and OCR confidence, and writes a `<image>_log.txt`. `0` prints only success + the output folder. | `0` (quiet) |
 | `--json` | Print the result details as JSON instead of plain text. | off |
 | `-h` / `--help` | Show the usage help and exit. | — |
 
@@ -256,7 +257,7 @@ py digitizer.py 'digitizer_cli(pic_dir="graph.png")'
 **Full example** — the `color`, `axis_values`, and `tick_setting` values below are **placeholders you must edit to match your own chart.** A leftover `color=(255,0,0)` (red) on a non-red curve finds no points and exits with *"produced no points."* Either delete the options you don't need (so those values auto-detect) or replace them with your real values:
 
 ```powershell
-py digitizer.py 'digitizer_cli(pic_dir="graph.png", color=(255,0,0), axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), output_dir="C:/Users/You/Downloads/out", normalize_y=False, limit_to_calibration=True, json=False)'
+py digitizer.py 'digitizer_cli(pic_dir="graph.png", color=(255,0,0), axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), output_dir="C:/Users/You/Downloads/out", normalize_y=False, limit_to_calibration=True, verbose=1, json=False)'
 ```
 
 The values you can put inside `digitizer_cli(...)`:
@@ -270,6 +271,7 @@ The values you can put inside `digitizer_cli(...)`:
 | `output_dir` *(`out_dir`, `out`)* | Folder to save into. Blank = Downloads. | Downloads |
 | `normalize_y` *(`normalize`)* | `True` adds the `y_norm` (0–1) column. | False |
 | `limit_to_calibration` *(`limit`)* | `True` keeps only points inside the calibration window. | True |
+| `verbose` *(`v`)* | `1` prints full detail and writes a `<image>_log.txt`; `0` stays quiet. | `0` |
 | `json` *(`as_json`, `print_json`)* | `True` prints full details as JSON. **Only accepted in this function-call form** (the flag version is `--json`). | False |
 
 Arguments can be **positional** in the order `pic_dir, color, tick_setting, axis_values, output_dir`, or by **name** using any alias above. Empty positions are allowed and fall back to defaults, and the words `none` / `null` / blank are treated as "auto".
@@ -300,14 +302,40 @@ Use a full path, choose an output folder, and add the normalized-Y column:
 py digitizer.py "C:\path\to\graph.png" --out "C:\path\to\out" --normalize-y
 ```
 
+See everything the run worked out — color, pixel coordinates, the tick→OCR values, point count, and the **OCR confidence score** — and drop a `log.txt` alongside the output:
+
+```powershell
+py digitizer.py graph.png --verbose 1
+```
+
 > **Tip:** There's also an interactive wizard that asks for each field one at a time. Start it with `py digitizer_2_11.py interactive` (or `wizard`).
+
+### Seeing more detail (`--verbose`)
+
+By default the command line is **quiet** — it just confirms success and tells you the output folder. When you want to see (or keep a record of) exactly what the tool did, raise the verbosity:
+
+```powershell
+py digitizer.py graph.png --verbose 1
+```
+
+At level `1` it prints, and the run also writes a `<image>_log.txt`, the following:
+
+- **color (r,g,b)** — the curve color it used.
+- **pixel coords** — where the four axis ticks sit in the image, in pixels.
+- **tick → values** — the four axis numbers (X min, X max, Y min, Y max) the tool used, and whether it read them automatically or you typed them in.
+- **OCR confidence** — how sure the built-in number-reader (Tesseract) was about the axis numbers it read off your image, as a percentage. A low number is a hint to double-check the numbers, or to type them in yourself with `--axis`. Shows **n/a** only when you supply *both* the axis values **and** the tick pixel coordinates yourself (so no reading is done); if you pass `--axis` but let the tick positions auto-detect, the reader still runs and a percentage is shown.
+- **num points** — how many data points were extracted.
+- **elapsed (s)** — how long the run took, in seconds.
+
+Level `0` (the default) stays quiet; you can also write just `--verbose` or `-v` as shorthand for level `1`.
 
 ### Output files
 
-Each run writes two files (named after your image):
+Every run writes two files (named after your image), plus a third at `--verbose 1`:
 
 - **`<imageName>_digitized_points.csv`** — the table of digitized points.
 - **`<imageName>_digitized_overlay.png`** — a copy of your image with the calibration box, the OCR axis-detection rectangles, and the detected points drawn on top (in the inverse of the curve color, so they stand out).
+- **`<imageName>_log.txt`** — *(only with `--verbose 1`)* a plain-text record of the run: time, color, pixel coords, tick→OCR values, point count, OCR confidence, and the output paths.
 
 The CSV columns:
 
@@ -387,7 +415,7 @@ The color it's matching doesn't match your curve. If you passed `--color` (or `c
 **The axis numbers came out wrong.**
 OCR can misread numbers. Always check them.
 - *In the app:* type the correct value into the **Min-Max Coordinates** box.
-- *On the command line:* pass them with `--axis xmin,xmax,ymin,ymax` (flags) or `axis_values=(xmin,xmax,ymin,ymax)` (function-call form).
+- *On the command line:* give them with `--axis xmin,xmax,ymin,ymax` (flags) or `axis_values=(xmin,xmax,ymin,ymax)` (function-call form). Run with `--verbose 1` to see the **OCR confidence score** — a low number is a strong hint that you should type the axis values in yourself with `--axis`.
 
 **"Image file not found" on the command line.**
 Put the image in your **Downloads** folder or in the folder the terminal is pointed at (a bare filename is searched in both), or pass the **full path in quotes**, e.g. `py digitizer.py "C:\Users\You\Pictures\graph.png"`.

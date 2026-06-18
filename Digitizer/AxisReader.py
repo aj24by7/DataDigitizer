@@ -30,6 +30,7 @@ class DetectedNumber:
     value: float
     bbox: Tuple[int, int, int, int]
     center: Tuple[float, float]
+    conf: float = -1.0
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,9 @@ class AxisScaleResult:
     y_max_point: Optional[Tuple[float, float]]
     overlay_points: List[Tuple[float, float]]
     overlay_rects: List[Tuple[float, float, float, float]]
+    # Mean Tesseract confidence (0-100) of the four numbers used for the axis
+    # min/max; None when no usable confidence was reported.
+    confidence: Optional[float] = None
 
 
 class AxisDetectionError(RuntimeError):
@@ -85,6 +89,10 @@ def detect_axis_scale(image: QtGui.QImage) -> AxisScaleResult:
     overlay_points = [det.center for det in overlay_numbers]
     overlay_rects = [_bbox_to_rect(det.bbox) for det in overlay_numbers]
 
+    used_dets = [det for det in (x_min_det, x_max_det, y_min_det, y_max_det) if det is not None]
+    used_confs = [det.conf for det in used_dets if det.conf is not None and det.conf >= 0]
+    confidence = (sum(used_confs) / len(used_confs)) if used_confs else None
+
     return AxisScaleResult(
         x_min=x_min_val,
         x_max=x_max_val,
@@ -96,6 +104,7 @@ def detect_axis_scale(image: QtGui.QImage) -> AxisScaleResult:
         y_max_point=y_max_det.center if y_max_det else None,
         overlay_points=overlay_points,
         overlay_rects=overlay_rects,
+        confidence=confidence,
     )
 
 
@@ -192,7 +201,13 @@ def _extract_numbers(image: "Image.Image") -> List[DetectedNumber]:
         if width <= 0 or height <= 0:
             continue
         center = (left + width / 2.0, top + height / 2.0)
-        results.append(DetectedNumber(value=value, bbox=(left, top, width, height), center=center))
+        try:
+            conf = float(data.get("conf", [])[i])
+        except (IndexError, TypeError, ValueError):
+            conf = -1.0
+        results.append(
+            DetectedNumber(value=value, bbox=(left, top, width, height), center=center, conf=conf)
+        )
     return results
 
 
@@ -297,6 +312,7 @@ def _map_rotated_number_to_original(det: DetectedNumber, original_height: int) -
         value=det.value,
         bbox=(new_left, new_top, new_width, new_height),
         center=center_orig,
+        conf=det.conf,
     )
 
 

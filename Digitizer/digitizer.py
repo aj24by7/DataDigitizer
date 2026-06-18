@@ -22,10 +22,14 @@ Add any of these for more control:
   --ticks  [x,y],[x,y],[x,y],[x,y]   tick pixel points: x_min,x_max,y_min,y_max
   --out    FOLDER       where to save output (default: Downloads)
   --normalize-y         add a 0-1 normalized Y column to the CSV
+  --verbose N (or -v)   N=1 shows full detail (color, pixel coords, tick->OCR,
+                        points, OCR confidence) and writes a <image>_log.txt;
+                        N=0 (default) prints only success + the output folder
   --json                print the result details as JSON
 
 Examples:
 
+  py digitizer.py plot2.png --verbose 1
   py digitizer.py plot2.png --color 255,0,0 --axis 0,10,0,100
   py digitizer.py "C:\Users\User\Desktop\graph.png" --out "C:\Users\User\Desktop\out"
 

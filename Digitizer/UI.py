@@ -720,6 +720,8 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             self.status_label.setText("Image loaded. Pick a color to start.")
 
     def toggle_pick_color(self, checked: bool) -> None:
+        if checked:
+            self._exit_manual_mask_mode()
         self._pick_color_mode = checked
         self._active_color_state().pick_color_mode = checked
         if checked:
@@ -901,9 +903,20 @@ class DigitizerWindow(QtWidgets.QMainWindow):
                 self.act_pick_color.setChecked(False)
                 self._pick_color_mode = False
                 self.image_tray.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
+            # Cancel an in-progress manual calibration so its clicks don't fight
+            # with mask drawing.
+            if self._calibration_mode == "manual":
+                self._calibration_mode = None
+                self._manual_stage = 0
             self.status_label.setText("Manual mask mode: drag to add, Shift+click to remove, Esc to exit.")
         else:
             self.status_label.setText("Manual mask mode off.")
+
+    def _exit_manual_mask_mode(self) -> None:
+        """Leave manual mask-draw mode if it's on, so image clicks reach the tool the
+        user just started (calibration / pick color) instead of drawing mask boxes."""
+        if self.act_mask_manual.isChecked():
+            self.act_mask_manual.setChecked(False)  # fires toggle_manual_mask(False)
 
     def clear_masks(self) -> None:
         for key in self._mask_rects:
@@ -1337,6 +1350,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return
+        self._exit_manual_mask_mode()
         self._calibration_mode = "manual"
         self._manual_stage = 0
         for key in self._manual_points:
@@ -1386,6 +1400,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return
+        self._exit_manual_mask_mode()
         if self._axis_result is None:
             self.status_label.setText("Run Axis Scale Detection first.")
             return
@@ -1410,6 +1425,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return
+        self._exit_manual_mask_mode()
         try:
             result = line_mediated_calibration(self._image)
         except Exception as exc:

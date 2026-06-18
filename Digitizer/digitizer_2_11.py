@@ -121,6 +121,9 @@ def print_help() -> None:
                 "Add detail as needed:",
                 "  py digitizer.py plot2.png --color 255,0,0 --axis 0,10,0,100 --out C:/out --normalize-y",
                 "",
+                "See everything (color, pixel coords, tick->OCR, points, OCR confidence) + write a log:",
+                "  py digitizer.py plot2.png --verbose 1",
+                "",
                 "Function-call / template style (one quoted line, copy and edit it):",
                 "  py digitizer.py 'digitizer_cli(pic_dir=\"plot2.png\", color=(255,0,0), axis_values=(0,10,0,100))'",
                 "",
@@ -152,6 +155,8 @@ def _looks_like_cli_invocation(args: list[str]) -> bool:
         "--normalize-y",
         "--limit-to-calibration",
         "--no-limit-to-calibration",
+        "--verbose",
+        "-v",
         "--json",
     }
     if any(arg.split("=", 1)[0] in cli_flags for arg in args):

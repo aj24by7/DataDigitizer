@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import csv
 import json
+import time
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
@@ -29,6 +31,10 @@ class DigitizerOutputs:
     axis_values: AxisValues
     tick_points: Tuple[Point, Point, Point, Point]
     used_ocr: bool
+    # Populated for the richer CLI output; safe defaults keep older callers working.
+    ocr_confidence: Optional[float] = None
+    log_path: Optional[str] = None
+    elapsed_seconds: float = 0.0
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -42,13 +48,17 @@ def digitize_image(
     output_dir: str | Path | None = None,
     normalize_y: bool = False,
     limit_to_calibration: bool = True,
+    verbose: int = 0,
 ) -> DigitizerOutputs:
     """Digitize a plot image using the existing GUI algorithms.
 
     `tick_points` order is x_min, x_max, y_min, y_max in image pixel
     coordinates. `axis_values` order is x_min, x_max, y_min, y_max in plot
-    coordinates.
+    coordinates. `verbose` only changes which extra artifacts are written: at
+    `verbose >= 1` a `<image>_log.txt` run record is written alongside the CSV.
     """
+
+    start = time.perf_counter()
 
     app = _ensure_qt_app()
     _ = app  # Keep a live reference for Qt object lifetime.
@@ -104,14 +114,39 @@ def digitize_image(
     _write_csv(csv_path, headers, rows)
     _write_overlay(window, overlay_path)
 
+    color_rgb = _normalize_color(window._selected_color)
+    tick_points = _current_tick_points(window)
+    ocr_confidence = _detection_confidence(window) if used_ocr else None
+    elapsed_seconds = round(time.perf_counter() - start, 3)
+
+    log_path: Optional[Path] = None
+    if verbose >= 1:
+        log_path = out_dir / f"{stem}_log.txt"
+        _write_log(
+            log_path,
+            image_path=image_path,
+            color_rgb=color_rgb,
+            tick_points=tick_points,
+            axis_values=provided_axis,
+            used_ocr=used_ocr,
+            point_count=len(rows),
+            ocr_confidence=ocr_confidence,
+            elapsed_seconds=elapsed_seconds,
+            csv_path=csv_path,
+            overlay_path=overlay_path,
+        )
+
     return DigitizerOutputs(
         csv_path=str(csv_path),
         overlay_path=str(overlay_path),
         point_count=len(rows),
-        color_rgb=_normalize_color(window._selected_color),
+        color_rgb=color_rgb,
         axis_values=provided_axis,
-        tick_points=_current_tick_points(window),
+        tick_points=tick_points,
         used_ocr=used_ocr,
+        ocr_confidence=ocr_confidence,
+        log_path=str(log_path) if log_path is not None else None,
+        elapsed_seconds=elapsed_seconds,
     )
 
 
@@ -332,6 +367,54 @@ def _write_overlay(window: DigitizerWindow, path: Path) -> None:
     painter.end()
     if not canvas.save(str(path), "PNG"):
         raise DigitizerCliError(f"Failed to save overlay PNG: {path}")
+
+
+def _detection_confidence(window: DigitizerWindow) -> Optional[float]:
+    result = getattr(window, "_axis_result", None)
+    confidence = getattr(result, "confidence", None)
+    if confidence is None:
+        return None
+    return round(float(confidence), 1)
+
+
+def _write_log(
+    path: Path,
+    *,
+    image_path: Path,
+    color_rgb: ColorRgb,
+    tick_points: Tuple[Point, Point, Point, Point],
+    axis_values: AxisValues,
+    used_ocr: bool,
+    point_count: int,
+    ocr_confidence: Optional[float],
+    elapsed_seconds: float,
+    csv_path: Path,
+    overlay_path: Path,
+) -> None:
+    x_min_pt, x_max_pt, y_min_pt, y_max_pt = tick_points
+    x_min, x_max, y_min, y_max = axis_values
+    axis_source = "OCR" if used_ocr else "provided manually"
+    conf_text = f"{ocr_confidence:.1f}%" if ocr_confidence is not None else "n/a (axes not read by OCR)"
+    lines = [
+        "Data Digitizer 2.12 - run log",
+        f"time             : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"elapsed (s)      : {elapsed_seconds:.2f}",
+        f"image            : {image_path}",
+        "",
+        f"color (r,g,b)    : {color_rgb[0]}, {color_rgb[1]}, {color_rgb[2]}",
+        "pixel coords (px) - tick positions in the image:",
+        f"    x_min tick   : {x_min_pt}",
+        f"    x_max tick   : {x_max_pt}",
+        f"    y_min tick   : {y_min_pt}",
+        f"    y_max tick   : {y_max_pt}",
+        f"tick -> values   : x_min={x_min}, x_max={x_max}, y_min={y_min}, y_max={y_max}  ({axis_source})",
+        f"OCR confidence   : {conf_text}",
+        f"num points       : {point_count}",
+        "",
+        f"CSV              : {csv_path}",
+        f"overlay          : {overlay_path}",
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _inverse_rgb(color: ColorRgb) -> ColorRgb:

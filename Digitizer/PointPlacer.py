@@ -165,7 +165,7 @@ def _scan_column(
 
 def _is_excluded(x: int, y: int, rects: List[Tuple[float, float, float, float]]) -> bool:
     for left, top, w, h in rects:
-        if left <= x <= left + w and top <= y <= top + h:
+        if left <= x < left + w and top <= y < top + h:
             return True
     return False
 
@@ -200,14 +200,13 @@ def interpolate_points(
         dy = p1.y - p0.y
         dist = math.hypot(dx, dy)
         if dist > 0:
-            chunks = int(dist // segment_len)
-            for chunk in range(chunks):
-                base = chunk * segment_len
-                for k in range(1, points_per_segment + 1):
-                    offset = base + k * step
-                    if offset >= dist:
-                        break
-                    t = offset / dist
-                    out.append(PlacedPoint(x=p0.x + dx * t, y=p0.y + dy * t))
+            # Emit evenly spaced interior points along the whole segment.
+            n = int(dist / step)
+            for i in range(1, n + 1):
+                offset = i * step
+                if offset >= dist:
+                    break
+                t = offset / dist
+                out.append(PlacedPoint(x=p0.x + dx * t, y=p0.y + dy * t))
         out.append(p1)
     return out

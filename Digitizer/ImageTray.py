@@ -149,7 +149,8 @@ class ImageTray(QtWidgets.QWidget):
             self._mask_drag_start = (x, y)
             self._mask_preview = (x, y, 0.0, 0.0)
             return
-        hit = self._hit_calibration_line(x, y)
+        scale = target.width() / self._image.width() if self._image.width() else 0.0
+        hit = self._hit_calibration_line(x, y, scale)
         if hit is not None:
             self._dragging_line = hit
             return
@@ -160,9 +161,20 @@ class ImageTray(QtWidgets.QWidget):
         if self._image is None or self._image.isNull():
             return
         target = self._fit_rect(self._image.size(), self.rect())
-        if not target.contains(event.position()):
-            return
-        x, y = self._map_to_image(event.position(), target)
+        pos = event.position()
+        in_progress_drag = self._dragging_line is not None or self._mask_dragging
+        if not target.contains(pos):
+            if in_progress_drag:
+                # Keep an active drag alive when the cursor leaves the image:
+                # clamp the position into the target rect and keep processing so
+                # the box / mask preview can be dragged right up to the edge.
+                cx = min(max(pos.x(), target.left()), target.right())
+                cy = min(max(pos.y(), target.top()), target.bottom())
+                pos = QtCore.QPointF(cx, cy)
+            else:
+                # Non-drag hover/hit-test path: ignore positions off the image.
+                return
+        x, y = self._map_to_image(pos, target)
         if self._mask_draw_enabled and self._mask_dragging and self._mask_drag_start:
             self._mask_preview = _rect_from_points(self._mask_drag_start, (x, y))
             self.update()
@@ -171,7 +183,8 @@ class ImageTray(QtWidgets.QWidget):
             self._adjust_calibration_box(x, y)
             self.update()
             return
-        hit = self._hit_calibration_line(x, y)
+        scale = target.width() / self._image.width() if self._image.width() else 0.0
+        hit = self._hit_calibration_line(x, y, scale)
         if hit is None:
             self.unsetCursor()
         elif hit in (0, 2):
@@ -220,8 +233,8 @@ class ImageTray(QtWidgets.QWidget):
             return 0, 0
         rel_x = (pos.x() - target.left()) / target.width()
         rel_y = (pos.y() - target.top()) / target.height()
-        x = int(rel_x * self._image.width())
-        y = int(rel_y * self._image.height())
+        x = int(round(rel_x * self._image.width()))
+        y = int(round(rel_y * self._image.height()))
         x = max(0, min(x, self._image.width() - 1))
         y = max(0, min(y, self._image.height() - 1))
         return x, y
@@ -333,8 +346,8 @@ class ImageTray(QtWidgets.QWidget):
         painter.drawRect(QtCore.QRectF(rx, ry, rw, rh))
 
     def _point_in_mask(self, x: int, y: int) -> bool:
-        for left, top, w, h in self._mask_rects:
-            if left <= x <= left + w and top <= y <= top + h:
+        for left, top, w, h in reversed(self._mask_rects):
+            if left <= x < left + w and top <= y < top + h:
                 return True
         return False
 
@@ -345,10 +358,19 @@ class ImageTray(QtWidgets.QWidget):
         ys = [p[1] for p in self._calibration_box]
         return min(xs), max(xs), min(ys), max(ys)
 
-    def _hit_calibration_line(self, x: int, y: int, tol: int = 5) -> Optional[int]:
+    def _hit_calibration_line(
+        self, x: int, y: int, scale: Optional[float] = None
+    ) -> Optional[int]:
         bounds = self._box_bounds()
         if bounds is None:
             return None
+        # Tolerance is ~5 screen pixels; convert to image pixels using the
+        # current display scale (screen px per image px) so the hit zone stays
+        # a constant on-screen size regardless of zoom.
+        if scale and scale > 0:
+            tol = 5.0 / scale
+        else:
+            tol = 5.0
         left, right, top, bottom = bounds
         if left <= x <= right and abs(y - top) <= tol:
             return 0

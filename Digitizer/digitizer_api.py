@@ -78,7 +78,10 @@ def digitize_image(
         _apply_color(window, requested_color)
 
     if window._selected_color is None:
-        raise DigitizerCliError("No color was supplied and auto color selection did not find a usable color.")
+        raise DigitizerCliError(
+            "No color was supplied and auto color selection did not find a usable color; "
+            "supply a color explicitly with --color r,g,b (CLI) or color=(r,g,b)."
+        )
 
     provided_ticks = _normalize_ticks(tick_points) if tick_points is not None else None
     provided_axis = _normalize_axis_values(axis_values) if axis_values is not None else None
@@ -105,6 +108,13 @@ def digitize_image(
 
     headers, rows = _build_export_rows(window, normalize_y=normalize_y)
     if not rows:
+        # base_points are the raw detected points before the calibration-box filter; if
+        # they existed but the limited result is empty, the box filter removed them all.
+        if bool(limit_to_calibration) and _had_points_before_calibration_filter(window):
+            raise DigitizerCliError(
+                "Digitization produced no points inside the calibration box; "
+                "pass --no-limit-to-calibration to keep points outside it."
+            )
         raise DigitizerCliError("Digitization completed but produced no points.")
 
     stem = image_path.stem
@@ -324,6 +334,18 @@ def _build_export_rows(window: DigitizerWindow, normalize_y: bool) -> tuple[list
     return headers, rows
 
 
+def _had_points_before_calibration_filter(window: DigitizerWindow) -> bool:
+    """True if any exported color slot detected raw points before the calibration-box
+    filter. Used to distinguish 'nothing detected at all' from 'the calibration box
+    filter removed every point' so the error can point at --no-limit-to-calibration."""
+    selected_indices = window._export_selected_color_indices or {window._active_color_index}
+    for index in selected_indices:
+        state = window._color_states[index]
+        if state.color is not None and state.base_points:
+            return True
+    return False
+
+
 def _write_csv(path: Path, headers: list[str], rows: list[list[float]]) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
@@ -396,7 +418,7 @@ def _write_log(
     axis_source = "OCR" if used_ocr else "provided manually"
     conf_text = f"{ocr_confidence:.1f}%" if ocr_confidence is not None else "n/a (axes not read by OCR)"
     lines = [
-        "Data Digitizer 2.12 - run log",
+        "Data Digitizer 2.13 - run log",
         f"time             : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"elapsed (s)      : {elapsed_seconds:.2f}",
         f"image            : {image_path}",

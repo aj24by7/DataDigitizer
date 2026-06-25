@@ -141,7 +141,7 @@ def _cluster_area(cluster: List[OcrBox]) -> float:
 
 
 def _is_number(text: str) -> bool:
-    text = text.replace(",", "").replace("?", "-")
+    text = text.replace(",", "").replace("−", "-").replace("–", "-")
     return bool(re.fullmatch(r"[-+]?\d*\.?\d+", text))
 
 

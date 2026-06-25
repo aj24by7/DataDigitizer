@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Tuple
@@ -195,6 +196,10 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._calibration_mode: Optional[str] = None
         self._manual_stage = 0
         self._limit_points_to_calib = False
+        # Log-scale axes (off = linear). Affects only the pixel->data value mapping at
+        # export time, never point detection.
+        self._x_log = False
+        self._y_log = False
         self._mask_rects: dict[str, list[Tuple[float, float, float, float]]] = {
             "words": [],
             "numbers": [],
@@ -291,6 +296,12 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_mask_manual.setCheckable(True)
         self.act_mask_clear = self.mask_menu.addAction("Clear Masks")
         self.filters_menu.addMenu(self.mask_menu)
+        self.scale_menu = QtWidgets.QMenu("Axis Scale (log)", self)
+        self.act_log_x = self.scale_menu.addAction("Log X axis")
+        self.act_log_x.setCheckable(True)
+        self.act_log_y = self.scale_menu.addAction("Log Y axis")
+        self.act_log_y.setCheckable(True)
+        self.filters_menu.addMenu(self.scale_menu)
         self.filters_menu.addSeparator()
         self.act_error_log = self.filters_menu.addAction("Error Log")
         self.filters_button.setMenu(self.filters_menu)
@@ -342,6 +353,18 @@ class DigitizerWindow(QtWidgets.QMainWindow):
 
         top_bar.addStretch(1)
         layout.addLayout(top_bar)
+
+        # Large-font step-by-step banner shown only during manual calibration.
+        self.calib_guide = QtWidgets.QLabel("")
+        self.calib_guide.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        self.calib_guide.setWordWrap(True)
+        self.calib_guide.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.calib_guide.setStyleSheet(
+            "QLabel { background: #e6f7ee; border: 2px solid #1aa564;"
+            " border-radius: 8px; padding: 10px 14px; margin: 0 0 4px 0; }"
+        )
+        self.calib_guide.setVisible(False)
+        layout.addWidget(self.calib_guide)
 
         self.image_tray = ImageTray()
         layout.addWidget(self.image_tray, 1)
@@ -399,6 +422,8 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_mask_legend.triggered.connect(self.run_mask_legend)
         self.act_mask_manual.toggled.connect(self.toggle_manual_mask)
         self.act_mask_clear.triggered.connect(self.clear_masks)
+        self.act_log_x.toggled.connect(self.toggle_log_x)
+        self.act_log_y.toggled.connect(self.toggle_log_y)
         self.act_error_log.triggered.connect(self.show_error_log)
         self.act_export_csv_raw.triggered.connect(lambda: self.export_points("csv", normalize_y=False))
         self.act_export_csv_norm.triggered.connect(lambda: self.export_points("csv", normalize_y=True))
@@ -552,6 +577,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         )
 
     def _set_active_color_index(self, index: int) -> None:
+        self._exit_manual_mask_mode()
         if index < 0 or index >= len(self._color_states) or index == self._active_color_index:
             return
         self._save_active_color_state()
@@ -574,6 +600,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.status_label.setText(message)
 
     def _add_color_slot(self) -> None:
+        self._exit_manual_mask_mode()
         self._save_active_color_state()
         self._color_states.append(ColorExtractionState())
         self._active_color_index = len(self._color_states) - 1
@@ -840,6 +867,24 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._restore_active_color_state()
         self._refresh_point_overlays()
 
+    def _invalidate_and_recompute_points(self) -> None:
+        """Recompute every configured color slot's points so current masks AND the
+        calibration box take effect immediately (on the next export and in the
+        overlay). Cheap no-op when no slot has any points yet."""
+        if not any(state.color is not None and state.points for state in self._color_states):
+            return
+        for state in self._color_states:
+            if state.color is None:
+                continue
+            state.points = []
+            state.base_points = []
+            self._compute_points_for_state(state)
+        # Keep the active slot's mirror fields in sync with its recomputed state.
+        active = self._active_color_state()
+        self._base_points = list(active.base_points)
+        self._points = list(active.points)
+        self._refresh_point_overlays()
+
     def run_mask_words(self) -> None:
         if self._image is None:
             self.status_label.setText("Load an image first.")
@@ -908,6 +953,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             if self._calibration_mode == "manual":
                 self._calibration_mode = None
                 self._manual_stage = 0
+                self._hide_calib_guide()
             self.status_label.setText("Manual mask mode: drag to add, Shift+click to remove, Esc to exit.")
         else:
             self.status_label.setText("Manual mask mode off.")
@@ -923,20 +969,29 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             self._mask_rects[key] = []
         self.image_tray.set_mask_overlays([])
         self.status_label.setText("Masks cleared.")
+        self._invalidate_and_recompute_points()
 
     def on_mask_rect_created(self, x: float, y: float, w: float, h: float) -> None:
         rect = (x, y, w, h)
         self._mask_rects["manual"].append(rect)
         self.image_tray.set_mask_overlays(self._all_mask_rects())
         self.status_label.setText("Mask added.")
+        self._invalidate_and_recompute_points()
 
     def on_mask_remove_requested(self, x: int, y: int) -> None:
-        for key, rects in self._mask_rects.items():
-            for idx, (left, top, w, h) in enumerate(rects):
-                if left <= x <= left + w and top <= y <= top + h:
+        # Iterate so the TOP-MOST (last-drawn) overlapping mask is removed first.
+        # Overlays are drawn in the flattened category order of _all_mask_rects()
+        # (words, numbers, legend, manual), so later entries sit on top — walk the
+        # categories and their rects in reverse and use half-open bounds.
+        for key in reversed(list(self._mask_rects.keys())):
+            rects = self._mask_rects[key]
+            for idx in range(len(rects) - 1, -1, -1):
+                left, top, w, h = rects[idx]
+                if left <= x < left + w and top <= y < top + h:
                     rects.pop(idx)
                     self.image_tray.set_mask_overlays(self._all_mask_rects())
                     self.status_label.setText("Mask removed.")
+                    self._invalidate_and_recompute_points()
                     return
 
     def show_error_log(self) -> None:
@@ -966,6 +1021,19 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         axis_values = self._get_axis_values()
         if axis_values is None:
             self.status_label.setText("Export requires X/Y min/max values.")
+            return
+        x_min_val, x_max_val, y_min_val, y_max_val = axis_values
+        if x_min_val == x_max_val:
+            self.status_label.setText("X min and X max must differ.")
+            return
+        if y_min_val == y_max_val:
+            self.status_label.setText("Y min and Y max must differ.")
+            return
+        if self._x_log and (x_min_val <= 0 or x_max_val <= 0):
+            self.status_label.setText("Log X scale needs positive X min and X max values.")
+            return
+        if self._y_log and (y_min_val <= 0 or y_max_val <= 0):
+            self.status_label.setText("Log Y scale needs positive Y min and Y max values.")
             return
         calibration_box = self._get_calibration_box()
         mapper = self._build_affine_mapper(axis_values)
@@ -1008,12 +1076,24 @@ class DigitizerWindow(QtWidgets.QMainWindow):
                 if mapper is not None:
                     x_val, y_val = self._map_pixel_affine(mapper, x_px, y_px)
                 else:
-                    x_val = x_min_val + (x_px - left) * (x_max_val - x_min_val) / (right - left)
-                    y_val = y_min_val + (bottom - y_px) * (y_max_val - y_min_val) / (bottom - top)
+                    x_frac = (x_px - left) / (right - left)
+                    y_frac = (bottom - y_px) / (bottom - top)
+                    x_val = self._interp_axis(x_frac, x_min_val, x_max_val, self._x_log)
+                    y_val = self._interp_axis(y_frac, y_min_val, y_max_val, self._y_log)
                 row: list[float] = [index + 1, color_r, color_g, color_b, x_val, y_val, x_px, y_px]
                 if normalize_y:
-                    denom = y_max_val - y_min_val
-                    y_norm = (y_val - y_min_val) / denom if denom != 0 else 0.0
+                    if self._y_log:
+                        if y_val <= 0 or y_min_val <= 0 or y_max_val <= 0:
+                            y_norm = 0.0
+                        else:
+                            log_denom = math.log10(y_max_val) - math.log10(y_min_val)
+                            if log_denom == 0:
+                                y_norm = 0.0
+                            else:
+                                y_norm = (math.log10(y_val) - math.log10(y_min_val)) / log_denom
+                    else:
+                        denom = y_max_val - y_min_val
+                        y_norm = (y_val - y_min_val) / denom if denom != 0 else 0.0
                     row.append(y_norm)
                 rows.append(row)
 
@@ -1105,9 +1185,13 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             y_min = self._manual_points["y_min"]
             y_max = self._manual_points["y_max"]
             if x_min and x_max and y_min and y_max:
-                left = y_min[0]
+                # Manual calibration: the box is the data-extent rectangle of the four
+                # clicked ticks — X-min/X-max fix the left/right edges, Y-min/Y-max fix
+                # the bottom/top. This works for non-traditional tick placements; the
+                # only requirement is X-min left of X-max and Y-min below Y-max.
+                left = x_min[0]
                 right = x_max[0]
-                bottom = x_min[1]
+                bottom = y_min[1]
                 top = y_max[1]
                 box = [(left, top), (right, top), (right, bottom), (left, bottom)]
         if not box:
@@ -1167,7 +1251,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         x_vec = (x_max_pt[0] - x_min_pt[0], x_max_pt[1] - x_min_pt[1])
         y_vec = (y_max_pt[0] - y_min_pt[0], y_max_pt[1] - y_min_pt[1])
         det = x_vec[0] * y_vec[1] - x_vec[1] * y_vec[0]
-        if abs(det) < 1e-6:
+        if abs(det) < 1e-6 * math.hypot(x_vec[0], x_vec[1]) * math.hypot(y_vec[0], y_vec[1]):
             return None
 
         def solve_uv(point: Tuple[float, float]) -> Tuple[float, float]:
@@ -1186,15 +1270,22 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             return None
 
         x_min_val, x_max_val, y_min_val, y_max_val = axis_values
-        x_scale = (x_max_val - x_min_val) / (u_max - u_min)
-        y_scale = (y_max_val - y_min_val) / (v_max - v_min)
+        # In log mode the axis is linear in log10(value), so solve the scale in log
+        # space and exponentiate in _map_pixel_affine. x_base/y_base are the working
+        # (log10 or raw) values at the X-min / Y-min ticks.
+        x_lo, x_hi = self._axis_work_values(x_min_val, x_max_val, self._x_log)
+        y_lo, y_hi = self._axis_work_values(y_min_val, y_max_val, self._y_log)
+        if x_lo is None or y_lo is None:
+            return None
+        x_scale = (x_hi - x_lo) / (u_max - u_min)
+        y_scale = (y_hi - y_lo) / (v_max - v_min)
         return (
             origin,
             x_vec,
             y_vec,
             det,
-            x_min_val,
-            y_min_val,
+            x_lo,
+            y_lo,
             u_min,
             v_min,
             x_scale,
@@ -1218,14 +1309,53 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         x_px: float,
         y_px: float,
     ) -> Tuple[float, float]:
-        origin, x_vec, y_vec, det, x_min_val, y_min_val, u_min, v_min, x_scale, y_scale = mapper
+        origin, x_vec, y_vec, det, x_base, y_base, u_min, v_min, x_scale, y_scale = mapper
         dx = x_px - origin[0]
         dy = y_px - origin[1]
         u = (dx * y_vec[1] - dy * y_vec[0]) / det
         v = (x_vec[0] * dy - x_vec[1] * dx) / det
-        x_val = x_min_val + (u - u_min) * x_scale
-        y_val = y_min_val + (v - v_min) * y_scale
+        x_work = x_base + (u - u_min) * x_scale
+        y_work = y_base + (v - v_min) * y_scale
+        x_val = 10.0 ** x_work if self._x_log else x_work
+        y_val = 10.0 ** y_work if self._y_log else y_work
         return x_val, y_val
+
+    def _axis_work_values(self, lo: float, hi: float, is_log: bool):
+        """Return the (low, high) axis values in the space the mapping is linear in:
+        log10 for a log axis (None,None if non-positive), or the raw values otherwise."""
+        if is_log:
+            import math
+
+            if lo <= 0 or hi <= 0:
+                return None, None
+            return math.log10(lo), math.log10(hi)
+        return lo, hi
+
+    def _interp_axis(self, frac: float, lo: float, hi: float, is_log: bool) -> float:
+        """Interpolate a data value at fraction `frac` of the axis span (linear box
+        fallback), honoring a log axis."""
+        if is_log:
+            import math
+
+            return 10.0 ** (math.log10(lo) + frac * (math.log10(hi) - math.log10(lo)))
+        return lo + frac * (hi - lo)
+
+    def toggle_log_x(self, checked: bool) -> None:
+        self._x_log = bool(checked)
+        self._announce_axis_scale()
+
+    def toggle_log_y(self, checked: bool) -> None:
+        self._y_log = bool(checked)
+        self._announce_axis_scale()
+
+    def _announce_axis_scale(self) -> None:
+        axes = [name for name, on in (("X", self._x_log), ("Y", self._y_log)) if on]
+        if axes:
+            self.status_label.setText(
+                f"Log scale ON for {' & '.join(axes)} axis. Min/max values must be positive."
+            )
+        else:
+            self.status_label.setText("Axis scale: linear (X and Y).")
 
     def _all_mask_rects(self) -> list[Tuple[float, float, float, float]]:
         rects: list[Tuple[float, float, float, float]] = []
@@ -1236,6 +1366,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
     def _set_mask_category(self, category: str, rects: list[Tuple[float, float, float, float]]) -> None:
         self._mask_rects[category] = rects
         self.image_tray.set_mask_overlays(self._all_mask_rects())
+        self._invalidate_and_recompute_points()
 
 
     def _update_color_swatch(self, color: QtGui.QColor) -> None:
@@ -1317,6 +1448,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._manual_stage = 0
         for key in self._manual_points:
             self._manual_points[key] = None
+        self._hide_calib_guide()
 
     def on_calibration_box_changed(self, left: int, top: int, right: int, bottom: int) -> None:
         """Re-store calibration after the user drags the dashed green box.
@@ -1344,7 +1476,9 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             "y_max": (left, top),
         }
         self._calibration_mode = None
+        self._hide_calib_guide()
         self.status_label.setText("Calibration box updated. Export will use the new box.")
+        self._invalidate_and_recompute_points()
 
     def start_manual_calibration(self) -> None:
         if self._image is None:
@@ -1364,6 +1498,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.status_label.setText(
             "Manual calibration: click X min, X max, Y min, Y max (first click per axis is min)."
         )
+        self._show_calib_guide(0)
 
     def _handle_manual_calibration_click(self, x: int, y: int) -> None:
         if self._manual_stage == 0:
@@ -1384,23 +1519,65 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             self._calibration_mode = None
             self.status_label.setText("Manual calibration complete. Enter values above if needed.")
         points = [pt for pt in self._manual_points.values() if pt is not None]
-        box = None
-        if all(self._manual_points.values()):
-            from Calibration import _box_from_axes
-
-            box = _box_from_axes(
-                self._manual_points["x_min"],
-                self._manual_points["x_max"],
-                self._manual_points["y_min"],
-                self._manual_points["y_max"],
-            )
+        box = self._manual_box_corners()
         self.image_tray.set_calibration_overlays(points, box)
+        if self._manual_stage <= 3:
+            self._show_calib_guide(self._manual_stage)
+        else:
+            self._show_calib_guide_complete()
+
+    # ----- manual calibration step-by-step guide banner -----
+    _MANUAL_GUIDE_STEPS = (
+        ("X MIN", "the tick on the X axis with the <b>smallest</b> X value &mdash; usually the far-<b>left</b> number on the bottom axis"),
+        ("X MAX", "the tick on the X axis with the <b>largest</b> X value &mdash; usually the far-<b>right</b> number on the bottom axis"),
+        ("Y MIN", "the tick on the Y axis with the <b>smallest</b> Y value &mdash; usually the <b>bottom</b> number on the left axis"),
+        ("Y MAX", "the tick on the Y axis with the <b>largest</b> Y value &mdash; usually the <b>top</b> number on the left axis"),
+    )
+
+    def _show_calib_guide(self, stage: int) -> None:
+        if not (0 <= stage <= 3):
+            self._hide_calib_guide()
+            return
+        name, desc = self._MANUAL_GUIDE_STEPS[stage]
+        self.calib_guide.setText(
+            f"<div style='font-size:14px;color:#0a5c33'>Manual calibration &nbsp;&middot;&nbsp; Step {stage + 1} of 4 &nbsp;&middot;&nbsp; click directly on the graph</div>"
+            f"<div style='font-size:24px;font-weight:800;margin-top:4px'>Now click <span style='color:#b3402e'>{name}</span></div>"
+            f"<div style='font-size:15px;margin-top:4px'>{desc}</div>"
+        )
+        self.calib_guide.setVisible(True)
+
+    def _show_calib_guide_complete(self) -> None:
+        self.calib_guide.setText(
+            "<div style='font-size:22px;font-weight:800;color:#0a5c33'>&#10003; Manual calibration complete</div>"
+            "<div style='font-size:15px;margin-top:4px'>The four points are set. Enter the axis values above if needed, then export.</div>"
+        )
+        self.calib_guide.setVisible(True)
+
+    def _hide_calib_guide(self) -> None:
+        self.calib_guide.setVisible(False)
+
+    def _manual_box_corners(self) -> Optional[list[Tuple[int, int]]]:
+        """Box (4 corner points) for manual calibration: the data-extent rectangle of
+        the four clicked ticks. X-min/X-max set the left/right edges, Y-min/Y-max set
+        the bottom/top, so it works for non-traditional tick placements. Returns None
+        until all four are placed and X-min is left of X-max and Y-min is below Y-max."""
+        pts = self._manual_points
+        if not all(pts.values()):
+            return None
+        left = pts["x_min"][0]
+        right = pts["x_max"][0]
+        bottom = pts["y_min"][1]
+        top = pts["y_max"][1]
+        if right <= left or bottom <= top:
+            return None
+        return [(left, top), (right, top), (right, bottom), (left, bottom)]
 
     def run_coordinate_calibration(self) -> None:
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return
         self._exit_manual_mask_mode()
+        self._hide_calib_guide()
         if self._axis_result is None:
             self.status_label.setText("Run Axis Scale Detection first.")
             return
@@ -1519,7 +1696,9 @@ def _line_intersection(
     sx = d[0] - c[0]
     sy = d[1] - c[1]
     denom = rx * sy - ry * sx
-    if abs(denom) < 1e-6:
+    len1 = math.hypot(rx, ry)
+    len2 = math.hypot(sx, sy)
+    if abs(denom) < 1e-9 * len1 * len2:
         return None
     qpx = c[0] - a[0]
     qpy = c[1] - a[1]

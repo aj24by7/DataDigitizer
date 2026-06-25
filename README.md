@@ -1,4 +1,4 @@
-# Data Digitizer 2.12 — User Guide
+# Data Digitizer 2.13 — User Guide
 
 ## What is this?
 
@@ -17,7 +17,7 @@ If you just want your data out, head to the [Quick start](#quick-start).
 
 ## Quick start
 
-1. Go to the **[Releases page](https://github.com/aj24by7/DataDigitizer/releases/tag/v2.12)**. Scroll down until you see a heading called **Assets**, then click the file named **`Digitizer.exe`** to download it. (See [Download & install](#download--install-no-python-needed) for exactly what that page looks like.)
+1. Go to the **[Releases page](https://github.com/aj24by7/DataDigitizer/releases/tag/v2.13)**. Scroll down until you see a heading called **Assets**, then click the file named **`Digitizer.exe`** to download it. (See [Download & install](#download--install-no-python-needed) for exactly what that page looks like.)
 2. **Double-click `Digitizer.exe`** to open it. (*Double-click* means quickly press the left mouse button twice in a row on the file's icon.) On the very first run, Windows shows a blue warning box — click the small **More info** text, then the **Run anyway** button. This is normal and safe; the full explanation is in [Download & install](#the-first-run-windows-warning-expected).
 3. In the app, work top to bottom: **Import** your graph image → set the **curve color** → run **Axis Detection** → run **Calibration** → **Place Points** → **Export** to CSV.
 
@@ -31,7 +31,7 @@ You do **not** need Python, and you do **not** need to install anything. The OCR
 
 ### Step 1 — Open the Releases page
 
-Go to <https://github.com/aj24by7/DataDigitizer/releases/tag/v2.12>.
+Go to <https://github.com/aj24by7/DataDigitizer/releases/tag/v2.13>.
 
 This is a GitHub *release page*. It shows a title and a description at the top. **Scroll down** past the description until you see a grey heading called **Assets** with a small triangle next to it. If the list under it looks collapsed, click the word **Assets** to open it.
 
@@ -113,7 +113,7 @@ Look at the four **Min-Max Coordinates** boxes. OCR is good but not perfect, so 
 This tells the app exactly where your plotted area sits in the image. Open **Tools → Calibration**, then choose one:
 
 - **Coordinate-Mediated Calibration** *(recommended — easiest)* — run **Axis Detection** first (step 3), because this option uses those detected axis positions. It automatically snaps a **dashed green box** onto your plot area. **If you ran step 3, use this and you can skip manual calibration entirely.**
-- **Manual Calibration** *(by hand)* — you will click four spots **directly on your chart image, in this exact order**: (1) the far-left end of the X axis, (2) the far-right end of the X axis, (3) the bottom of the Y axis, (4) the top of the Y axis. You are clicking *locations on the picture*, not typing numbers.
+- **Manual Calibration** *(by hand)* — you click four ticks **directly on your chart image**. A **large green step-by-step banner** appears above the image and walks you through each click in order: **X MIN** (smallest X), **X MAX** (largest X), **Y MIN** (smallest Y), **Y MAX** (largest Y), telling you exactly which point to click at each step. You are clicking *locations on the picture*, not typing numbers. The points don't have to be in textbook positions — the box is built correctly from wherever you click, as long as **X MIN is left of X MAX** and **Y MIN is below Y MAX**.
 
 Either way, you'll end up with a **dashed green box** (a rectangle drawn with a dashed green outline) marking the plotted region.
 
@@ -171,6 +171,16 @@ Export will **quietly refuse** and show a status message unless **both** of thes
 2. **A calibration has been run** (the dashed green box exists) — otherwise you'll see *"Export requires calibration."*
 
 If either message appears, glance at the status bar, go back, and finish that step.
+
+### Log-scale axes (optional)
+
+Most plots are linear, so this is tucked away — but if your graph uses a **logarithmic** X or Y axis, turn it on under **Advanced → Axis Scale (log)**:
+
+- Tick **Log X axis** and/or **Log Y axis**.
+- Calibrate and enter the axis min/max **as the real numbers printed on the axis** (e.g. `1` and `1000`), exactly as you would for a linear plot.
+- On export, that axis is interpolated in log space, so the values come out correct for a log scale. Leave the boxes unticked for normal linear axes.
+
+> A log axis needs **positive** min/max values (you can't take the log of zero or a negative number). If a value is zero or negative, export will tell you instead of producing wrong numbers.
 
 ### Tips for the best results
 
@@ -381,16 +391,30 @@ The dependencies are: `PyInstaller` (for building the exe), `PyQt6` (the window)
 
 ---
 
-## Build the Windows .exe
+## Build pipeline — turning the code into an app
 
-From the source folder, with dependencies installed:
+The project is plain Python (a PyQt6 GUI plus a small CLI). There are three "shapes" you can run it as, and the conversion is the same idea each time — **[PyInstaller](https://pyinstaller.org)** bundles the Python interpreter, this code, and the dependencies into one self-contained program described by a `.spec` file:
+
+| Target | What it is | How it's made |
+| --- | --- | --- |
+| **CLI** | `python3 digitizer.py …` | No build needed — it runs straight from the source files with Python (see [Run from source](#run-from-source-for-developers)). |
+| **Windows `.exe`** | a one-file `Digitizer.exe` you double-click | PyInstaller reads `digitizer.spec`, bundles the GUI entry `digitizer_desktop.py` **and** the Tesseract OCR runtime in `vendor\tesseract`, and writes `dist\Digitizer.exe`. |
+| **macOS `.app`** | a `Digitizer.app` bundle | Same tool, the macOS specs/scripts in the separate **[digitizer_mac](https://github.com/RayanA07/digitizer_mac)** repo (`bash build_macos.sh`) produce `Digitizer.app`. |
+
+### Starter command (Windows)
+
+One-click: double-click **`build.cmd`** in this folder. (It just runs the PowerShell build with the execution policy unblocked, then keeps the window open so you can read the result.)
+
+Or from a terminal in this folder:
 
 ```powershell
 py -m pip install -r requirements.txt
 .\build_windows.ps1
 ```
 
-The result is **`dist\Digitizer.exe`** — a windowed, one-file app you can double-click. The **Tesseract OCR runtime** under `vendor\tesseract` is **bundled into the exe**, so OCR features (axis-value detection and the text/number/legend masking tools) work without anyone needing a separate Tesseract install.
+Either way the result is **`dist\Digitizer.exe`** — a windowed, one-file app you can double-click. The **Tesseract OCR runtime** under `vendor\tesseract` is **bundled into the exe**, so OCR features (axis-value detection and the text/number/legend masking tools) work without anyone needing a separate Tesseract install.
+
+> **macOS starter:** in the `digitizer_mac` repo it's `bash build_macos.sh` (in each app folder), which vendors Tesseract via Homebrew and produces the `.app`. That repo also builds on a GitHub Actions macOS runner automatically.
 
 ---
 
@@ -462,7 +486,7 @@ This is a **separate, optional** tool. It's completely independent of the main D
 **What it does:** it measures how faithfully a digitized curve reproduces a reference curve. You load **two CSV files** — an *original* reference and a *digitized* one — and it lines them up on a common X grid and reports accuracy numbers (MAE, RMSE, R-squared, bias, MAPE/sMAPE/WAPE, and more) alongside diagnostic plots: the curve overlay, residuals, absolute error, and zoomable outliers. It cleans messy data (drops non-numeric rows, collapses duplicate X values), can filter by color slot, and can optionally optimize a constant X-shift before comparing. Results can be exported to a comparison CSV.
 
 **Run the app (no Python needed):**
-Double-click **`AccuracyTester.exe`** (download it from [Releases](https://github.com/aj24by7/DataDigitizer/releases/tag/v2.12), or, if you built from source, find it in the `AccuracyTester` folder). It's a windowed, one-file app — no install or console needed.
+Double-click **`AccuracyTester.exe`** (download it from [Releases](https://github.com/aj24by7/DataDigitizer/releases/tag/v2.13), or, if you built from source, find it in the `AccuracyTester` folder). It's a windowed, one-file app — no install or console needed.
 
 **Run from source:**
 
@@ -472,4 +496,4 @@ py accuracytester_desktop.py
 
 ---
 
-*Runtime logs are written to `%LOCALAPPDATA%\DataDigitizer\2.12\logs` (you can also view them in-app via **Advanced → Error Log**).*
+*Runtime logs are written to `%LOCALAPPDATA%\DataDigitizer\2.13\logs` (you can also view them in-app via **Advanced → Error Log**).*

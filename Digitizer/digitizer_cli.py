@@ -48,7 +48,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _run_function_call(raw_args)
 
     parser = build_parser()
-    args = parser.parse_args(raw_args)
+    args = parser.parse_args(_detach_nonnumeric_verbose(raw_args))
 
     pic_path = args.pic_dir_option or args.pic_path
     if not pic_path:
@@ -79,7 +79,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 def interactive_main() -> int:
     print()
-    print("Data Digitizer 2.12 Interactive CLI")
+    print("Data Digitizer 2.13 Interactive CLI")
     print("Leave optional fields blank and press Enter to use auto/default behavior.")
     print()
 
@@ -192,7 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--verbose",
         dest="verbose",
         nargs="?",
-        type=int,
+        type=_verbose_value,
         const=1,
         default=0,
         help=(
@@ -204,11 +204,53 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _verbose_value(token: str) -> object:
+    """Type for -v/--verbose: parse a numeric level, else leave the token alone.
+
+    A non-numeric token (e.g. an image path) is normally detached before parsing by
+    _detach_nonnumeric_verbose; if one still reaches here we return the implicit level
+    1 rather than raising an int-parse error so 'digitizer.py --verbose image.png' is safe.
+    """
+    text = str(token).strip()
+    try:
+        return int(text)
+    except ValueError:
+        return 1
+
+
+def _detach_nonnumeric_verbose(argv: Sequence[str]) -> list[str]:
+    """Insert the implicit level when -v/--verbose is followed by a non-numeric token.
+
+    With nargs='?', argparse would otherwise consume the next token (e.g. the image
+    path) as the verbose value. By only letting a numeric token attach to the flag,
+    'digitizer.py --verbose image.png' keeps image.png as the positional argument while
+    'digitizer.py --verbose 1 image.png' still reads the level.
+    """
+    args = list(argv)
+    out: list[str] = []
+    flags = {"-v", "--verbose"}
+    for index, token in enumerate(args):
+        out.append(token)
+        if token in flags:
+            following = args[index + 1] if index + 1 < len(args) else None
+            if following is None or not _looks_like_verbose_level(following):
+                out.append("1")
+    return out
+
+
+def _looks_like_verbose_level(token: str) -> bool:
+    try:
+        int(str(token).strip())
+    except ValueError:
+        return False
+    return True
+
+
 def print_function_call_usage() -> None:
     print(
         "\n".join(
             [
-                "Data Digitizer 2.12 CLI",
+                "Data Digitizer 2.13 CLI",
                 "",
                 "Use one quoted function-call line:",
                 "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",
@@ -285,18 +327,27 @@ def parse_function_call(call_text: str) -> dict[str, Any]:
         raise DigitizerCliError(f"expected {CALL_NAME}(...)")
 
     values: dict[str, Any] = {}
-    for index, raw_part in enumerate(_split_top_level(match.group(1))):
+    # Track the positional slot separately so it only advances for UNNAMED parts;
+    # an empty slot (",,") still consumes a positional slot but contributes no value.
+    positional_index = 0
+    seen_keyword = False
+    for raw_part in _split_top_level(match.group(1)):
         part = raw_part.strip()
-        if not part:
-            continue
 
         name, raw_value = _split_keyword_argument(part)
         if name is None:
-            if index >= len(CALL_SLOT_NAMES):
+            if seen_keyword and part:
+                raise DigitizerCliError("positional value after keyword argument")
+            if positional_index >= len(CALL_SLOT_NAMES):
                 raise DigitizerCliError(f"too many positional values in {CALL_NAME}(...).")
-            values[CALL_SLOT_NAMES[index]] = _parse_call_value(part)
+            slot = CALL_SLOT_NAMES[positional_index]
+            positional_index += 1
+            if not part:
+                continue
+            values[slot] = _parse_call_value(part)
             continue
 
+        seen_keyword = True
         canonical_name = _canonical_call_name(name)
         if canonical_name is None:
             raise DigitizerCliError(f"unknown {CALL_NAME}(...) input: {name}")
@@ -325,15 +376,13 @@ def _split_top_level(text: str) -> list[str]:
     start = 0
     depth = 0
     quote: str | None = None
-    escape = False
 
     for index, char in enumerate(text):
         if quote is not None:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == quote:
+            # Value semantics are literal (no unescaping in _parse_call_value), so a
+            # backslash never escapes here: only a matching quote char closes the string.
+            # This lets quoted Windows paths ending in a backslash parse correctly.
+            if char == quote:
                 quote = None
             continue
 
@@ -361,15 +410,12 @@ def _split_top_level(text: str) -> list[str]:
 def _split_keyword_argument(part: str) -> tuple[str | None, str]:
     depth = 0
     quote: str | None = None
-    escape = False
 
     for index, char in enumerate(part):
         if quote is not None:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == quote:
+            # Literal value semantics: a backslash never escapes here, only a matching
+            # quote char closes the string, so trailing-backslash Windows paths parse.
+            if char == quote:
                 quote = None
             continue
 

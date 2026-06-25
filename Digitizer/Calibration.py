@@ -113,6 +113,10 @@ def _box_from_axes(
 ) -> Optional[List[Tuple[int, int]]]:
     if x_min is None or x_max is None or y_min is None or y_max is None:
         return None
+    # Used by coordinate/line calibration, which pass points already snapped onto the
+    # plot's axis LINES: the y-axis line gives the left edge and the x-axis line gives
+    # the bottom edge. (Manual calibration uses its own data-extent box instead — see
+    # DigitizerWindow._manual_box_corners.)
     left_x = y_min[0]
     right_x = x_max[0]
     bottom_y = x_min[1]

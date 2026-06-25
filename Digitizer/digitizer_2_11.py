@@ -110,7 +110,7 @@ def print_help() -> None:
     print(
         "\n".join(
             [
-                "Data Digitizer 2.12",
+                "Data Digitizer 2.13",
                 "",
                 "Open the graphical app:",
                 "  double-click Digitizer.exe   (or from source: py digitizer_2_11.py)",
@@ -173,8 +173,8 @@ def _looks_like_cli_invocation(args: list[str]) -> bool:
 def _user_app_data_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA")
     if base:
-        return Path(base) / "DataDigitizer" / "2.12"
-    return Path.home() / ".datadigitizer" / "2.12"
+        return Path(base) / "DataDigitizer" / "2.13"
+    return Path.home() / ".datadigitizer" / "2.13"
 
 
 def _resolve_tesseract_cmd(bundle_root: Path) -> Path | None:

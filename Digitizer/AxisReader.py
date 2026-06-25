@@ -89,7 +89,11 @@ def detect_axis_scale(image: QtGui.QImage) -> AxisScaleResult:
     overlay_points = [det.center for det in overlay_numbers]
     overlay_rects = [_bbox_to_rect(det.bbox) for det in overlay_numbers]
 
-    used_dets = [det for det in (x_min_det, x_max_det, y_min_det, y_max_det) if det is not None]
+    # De-duplicate by object identity so a detection reused for two of the four
+    # axis endpoints (e.g. a single-value axis) is not double-counted in the mean.
+    used_dets = list(
+        {id(det): det for det in (x_min_det, x_max_det, y_min_det, y_max_det) if det is not None}.values()
+    )
     used_confs = [det.conf for det in used_dets if det.conf is not None and det.conf >= 0]
     confidence = (sum(used_confs) / len(used_confs)) if used_confs else None
 
@@ -282,6 +286,9 @@ def _min_max_from_cluster(
     if not cluster:
         return None, None, None, None
     if len(cluster) == 1:
+        # Only one label was detected on this axis: report it as the min and
+        # leave max unknown. A proper max needs a second calibration point, so
+        # we cannot infer it here without broader, riskier changes.
         return cluster[0].value, None, cluster[0], None
     if axis == "x":
         ordered = sorted(cluster, key=lambda n: n.center[0])

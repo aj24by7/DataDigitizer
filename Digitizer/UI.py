@@ -296,12 +296,8 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_mask_manual.setCheckable(True)
         self.act_mask_clear = self.mask_menu.addAction("Clear Masks")
         self.filters_menu.addMenu(self.mask_menu)
-        self.scale_menu = QtWidgets.QMenu("Axis Scale (log)", self)
-        self.act_log_x = self.scale_menu.addAction("Log X axis")
-        self.act_log_x.setCheckable(True)
-        self.act_log_y = self.scale_menu.addAction("Log Y axis")
-        self.act_log_y.setCheckable(True)
-        self.filters_menu.addMenu(self.scale_menu)
+        # Log-scale axes used to live here as an "Axis Scale (log)" submenu; they now
+        # sit as per-axis toggle buttons next to the Min-Max Coordinate inputs below.
         self.filters_menu.addSeparator()
         self.act_error_log = self.filters_menu.addAction("Error Log")
         self.filters_button.setMenu(self.filters_menu)
@@ -387,7 +383,35 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         coord_layout.addWidget(self.coord_x_max, 0, 3)
         coord_layout.addWidget(self.coord_y_min, 1, 1)
         coord_layout.addWidget(self.coord_y_max, 1, 3)
-        coord_layout.setColumnStretch(4, 1)
+
+        # Per-axis log-scale toggles, sitting just to the right of each axis's min/max
+        # inputs (this replaces the old Advanced -> "Axis Scale (log)" toolbar submenu).
+        log_toggle_style = (
+            "QToolButton {"
+            " padding: 3px 14px; border: 1px solid #c0c4c8; border-radius: 4px;"
+            " background: #f8f9fa; color: #555; font-weight: 600;"
+            "}"
+            "QToolButton:hover { background: #eef1f3; }"
+            "QToolButton:checked { background: #1aa564; color: #ffffff;"
+            " border-color: #128a52; }"
+        )
+        self.log_x_toggle = QtWidgets.QToolButton()
+        self.log_x_toggle.setText("log")
+        self.log_x_toggle.setCheckable(True)
+        self.log_x_toggle.setStyleSheet(log_toggle_style)
+        self.log_x_toggle.setToolTip(
+            "Log scale (base-10) for the X axis. X min and X max must be positive."
+        )
+        self.log_y_toggle = QtWidgets.QToolButton()
+        self.log_y_toggle.setText("log")
+        self.log_y_toggle.setCheckable(True)
+        self.log_y_toggle.setStyleSheet(log_toggle_style)
+        self.log_y_toggle.setToolTip(
+            "Log scale (base-10) for the Y axis. Y min and Y max must be positive."
+        )
+        coord_layout.addWidget(self.log_x_toggle, 0, 4)
+        coord_layout.addWidget(self.log_y_toggle, 1, 4)
+        coord_layout.setColumnStretch(5, 1)
         layout.addWidget(self.coord_group)
 
         self.status_label = QtWidgets.QLabel("Load an image to begin.")
@@ -422,8 +446,8 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_mask_legend.triggered.connect(self.run_mask_legend)
         self.act_mask_manual.toggled.connect(self.toggle_manual_mask)
         self.act_mask_clear.triggered.connect(self.clear_masks)
-        self.act_log_x.toggled.connect(self.toggle_log_x)
-        self.act_log_y.toggled.connect(self.toggle_log_y)
+        self.log_x_toggle.toggled.connect(self.toggle_log_x)
+        self.log_y_toggle.toggled.connect(self.toggle_log_y)
         self.act_error_log.triggered.connect(self.show_error_log)
         self.act_export_csv_raw.triggered.connect(lambda: self.export_points("csv", normalize_y=False))
         self.act_export_csv_norm.triggered.connect(lambda: self.export_points("csv", normalize_y=True))
@@ -1517,7 +1541,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             self._manual_points["y_max"] = (x, y)
             self._manual_stage = 4
             self._calibration_mode = None
-            self.status_label.setText("Manual calibration complete. Enter values above if needed.")
+            self.status_label.setText("Manual calibration complete. Enter values in the Min-Max Coordinates boxes if needed.")
         points = [pt for pt in self._manual_points.values() if pt is not None]
         box = self._manual_box_corners()
         self.image_tray.set_calibration_overlays(points, box)
@@ -1549,7 +1573,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
     def _show_calib_guide_complete(self) -> None:
         self.calib_guide.setText(
             "<div style='font-size:22px;font-weight:800;color:#0a5c33'>&#10003; Manual calibration complete</div>"
-            "<div style='font-size:15px;margin-top:4px'>The four points are set. Enter the axis values above if needed, then export.</div>"
+            "<div style='font-size:15px;margin-top:4px'>The four points are set. Enter the axis values in the Min-Max Coordinates boxes if needed, then export.</div>"
         )
         self.calib_guide.setVisible(True)
 

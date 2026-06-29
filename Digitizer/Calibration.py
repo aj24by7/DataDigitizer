@@ -84,7 +84,24 @@ def coordinate_mediated_calibration(
     y_min = snap_right(y_min_point)
     y_max = snap_right(y_max_point)
 
-    box = _box_from_axes(x_min, x_max, y_min, y_max)
+    # Draw the dashed calibration window from the RAW (un-snapped) input points, exactly
+    # the way manual calibration builds it from the four clicked points. The snapped
+    # points above are still what the coordinate math consumes (the affine mapper reads
+    # CalibrationResult.x_min_point ... via DigitizerWindow._get_axis_points), but the
+    # *box* must hang at the tick-label extents instead of being pulled onto the black
+    # axis lines — that snapping is why the old box hugged the axes and "touched" the
+    # min/max dots. Using the raw points makes this box identical in spirit to manual's.
+    def _round_point(point):
+        if point is None:
+            return None
+        return (int(round(point[0])), int(round(point[1])))
+
+    box = _box_from_axes(
+        _round_point(x_min_point),
+        _round_point(x_max_point),
+        _round_point(y_min_point),
+        _round_point(y_max_point),
+    )
     return CalibrationResult(x_min, x_max, y_min, y_max, box)
 
 
@@ -113,13 +130,16 @@ def _box_from_axes(
 ) -> Optional[List[Tuple[int, int]]]:
     if x_min is None or x_max is None or y_min is None or y_max is None:
         return None
-    # Used by coordinate/line calibration, which pass points already snapped onto the
-    # plot's axis LINES: the y-axis line gives the left edge and the x-axis line gives
-    # the bottom edge. (Manual calibration uses its own data-extent box instead — see
-    # DigitizerWindow._manual_box_corners.)
-    left_x = y_min[0]
+    # GUI-only box geometry. Build the dashed rectangle from the DATA EXTENT of the four
+    # axis points: X-min/X-max fix the left/right edges, Y-min/Y-max fix the bottom/top.
+    # This is the same construction manual calibration uses (see
+    # DigitizerWindow._manual_box_corners), so the coordinate-mediated box now "hangs" at
+    # the tick extents instead of hugging the y-axis/x-axis lines and touching the snapped
+    # min/max dots. Only the drawn overlay is affected — export uses the affine mapper built
+    # from the snapped points (DigitizerWindow._get_axis_points), not this box.
+    left_x = x_min[0]
     right_x = x_max[0]
-    bottom_y = x_min[1]
+    bottom_y = y_min[1]
     top_y = y_max[1]
     if right_x <= left_x or bottom_y <= top_y:
         return None

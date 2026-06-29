@@ -21,6 +21,8 @@ def digitizer_cli(
     tick_setting: object = None,
     axis_values: object = None,
     output_dir: str | Path | None = None,
+    log_x: object = False,
+    log_y: object = False,
     normalize_y: bool = False,
     limit_to_calibration: bool = True,
     verbose: object = 0,
@@ -36,6 +38,8 @@ def digitizer_cli(
         tick_points=_coerce_points(tick_setting),
         axis_values=_coerce_axis_values(axis_values),
         output_dir=None if _is_null_value(output_dir) else output_dir,
+        log_x=_coerce_bool(log_x, default=False),
+        log_y=_coerce_bool(log_y, default=False),
         normalize_y=bool(normalize_y),
         limit_to_calibration=bool(limit_to_calibration),
         verbose=_coerce_verbose(verbose),
@@ -62,6 +66,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             tick_setting=args.ticks,
             axis_values=args.axis_values,
             output_dir=args.output_dir,
+            log_x=args.log_x,
+            log_y=args.log_y,
             normalize_y=args.normalize_y,
             limit_to_calibration=args.limit_to_calibration,
             verbose=verbose,
@@ -109,6 +115,8 @@ def interactive_main() -> int:
                 tick_setting=values["ticks"],
                 axis_values=values["axis_values"],
                 output_dir=values["output_dir"],
+                log_x=values["log_x"],
+                log_y=values["log_y"],
                 normalize_y=values["normalize_y"],
                 limit_to_calibration=values["limit_to_calibration"],
             )
@@ -166,25 +174,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Axis values as 'xmin,xmax,ymin,ymax'. If omitted, OCR axis detection is used.",
     )
     parser.add_argument(
+        "--log-x",
+        dest="log_x",
+        action="store_true",
+        help="Treat the X axis as base-10 logarithmic (X min and X max must be positive). Mirrors the GUI's log toggle.",
+    )
+    parser.add_argument(
+        "--log-y",
+        dest="log_y",
+        action="store_true",
+        help="Treat the Y axis as base-10 logarithmic (Y min and Y max must be positive). Mirrors the GUI's log toggle.",
+    )
+    parser.add_argument(
         "--output-dir",
         "--out",
         "-o",
         dest="output_dir",
         help="Output folder. Default: your Downloads folder.",
-    )
-    parser.add_argument("--normalize-y", action="store_true", help="Add a y_norm column to the CSV.")
-    parser.add_argument(
-        "--limit-to-calibration",
-        dest="limit_to_calibration",
-        action="store_true",
-        default=True,
-        help="Only export points inside the calibration window. This is the CLI default.",
-    )
-    parser.add_argument(
-        "--no-limit-to-calibration",
-        dest="limit_to_calibration",
-        action="store_false",
-        help="Match the GUI default and export points outside the calibration window too.",
     )
     parser.add_argument("--json", action="store_true", help="Print result metadata as JSON.")
     parser.add_argument(
@@ -200,6 +206,21 @@ def build_parser() -> argparse.ArgumentParser:
             "1 (or just -v / --verbose) prints color, pixel coords, tick->OCR values, "
             "point count, and OCR confidence, and writes a <image>_log.txt."
         ),
+    )
+    # --- Rarely needed extras (kept for power users; safe to ignore) -------------
+    parser.add_argument("--normalize-y", action="store_true", help="(Optional) Add a y_norm column to the CSV.")
+    parser.add_argument(
+        "--limit-to-calibration",
+        dest="limit_to_calibration",
+        action="store_true",
+        default=True,
+        help="(Optional) Only export points inside the calibration window. This is the CLI default.",
+    )
+    parser.add_argument(
+        "--no-limit-to-calibration",
+        dest="limit_to_calibration",
+        action="store_false",
+        help="(Optional) Match the GUI default and export points outside the calibration window too.",
     )
     return parser
 
@@ -280,19 +301,22 @@ def print_template() -> None:
                 "Full template (every option - delete the parts you don't need):",
                 "  py digitizer.py 'digitizer_cli(pic_dir=\"plot2.png\", color=(255,0,0), "
                 "axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), "
-                "output_dir=\"C:/Users/User/Downloads/out\", normalize_y=False, "
-                "limit_to_calibration=True, verbose=1, json=False)'",
+                "log_x=False, log_y=False, output_dir=\"C:/Users/User/Downloads/out\", "
+                "verbose=1, json=False, normalize_y=False, limit_to_calibration=True)'",
                 "",
                 "What each value means:",
                 "  pic_dir=\"...\"               required - image file (a bare name is looked up in Downloads)",
                 "  color=(R,G,B)               curve color, each 0-255; omit to auto-detect",
                 "  axis_values=(x0,x1,y0,y1)   axis numbers (xmin,xmax,ymin,ymax); omit to read by OCR",
                 "  tick_setting=([x,y] x4)     tick pixel points x_min,x_max,y_min,y_max; omit for OCR",
+                "  log_x=True                  read the X axis in base-10 log space (X min/max must be positive)",
+                "  log_y=True                  read the Y axis in base-10 log space (Y min/max must be positive)",
                 "  output_dir=\"...\"            folder to save into; omit for Downloads",
-                "  normalize_y=True            add a 0-1 normalized Y column to the CSV",
-                "  limit_to_calibration=False  also keep points outside the calibration box",
                 "  verbose=1                   show full detail + write a <image>_log.txt (0 = quiet)",
                 "  json=True                   print the full result details as JSON",
+                "  -- the two below are optional extras; leave them off for normal use --",
+                "  normalize_y=True            (optional) add a 0-1 normalized Y column to the CSV",
+                "  limit_to_calibration=False  (optional) also keep points outside the calibration box",
             ]
         )
     )
@@ -363,6 +387,8 @@ def parse_function_call(call_text: str) -> dict[str, Any]:
         "tick_setting": values.get("tick_setting"),
         "axis_values": values.get("axis_values"),
         "output_dir": values.get("output_dir"),
+        "log_x": _coerce_bool(values.get("log_x"), default=False),
+        "log_y": _coerce_bool(values.get("log_y"), default=False),
         "normalize_y": _coerce_bool(values.get("normalize_y"), default=False),
         "limit_to_calibration": _coerce_bool(values.get("limit_to_calibration"), default=True),
         "verbose": _coerce_verbose(values.get("verbose")),
@@ -455,6 +481,12 @@ def _canonical_call_name(name: str) -> str | None:
         "output_dir": "output_dir",
         "out_dir": "output_dir",
         "out": "output_dir",
+        "log_x": "log_x",
+        "logx": "log_x",
+        "x_log": "log_x",
+        "log_y": "log_y",
+        "logy": "log_y",
+        "y_log": "log_y",
         "normalize_y": "normalize_y",
         "normalize": "normalize_y",
         "limit_to_calibration": "limit_to_calibration",
@@ -720,9 +752,11 @@ def _prompt_values() -> Optional[dict[str, object]]:
         except DigitizerCliError as exc:
             print(f"Invalid axis values: {exc}")
 
+    log_x = _prompt_yes_no("Log scale on the X axis? [y/N]: ", default=False)
+    log_y = _prompt_yes_no("Log scale on the Y axis? [y/N]: ", default=False)
     output_dir = _clean_input(input("Output directory [blank = image folder]: "))
-    normalize_y = _prompt_yes_no("Add normalized Y column? [y/N]: ", default=False)
-    limit_to_calibration = _prompt_yes_no("Limit points to calibration window? [Y/n]: ", default=True)
+    normalize_y = _prompt_yes_no("Add normalized Y column? (optional) [y/N]: ", default=False)
+    limit_to_calibration = _prompt_yes_no("Limit points to calibration window? (optional) [Y/n]: ", default=True)
 
     print()
     print("Summary")
@@ -730,6 +764,7 @@ def _prompt_values() -> Optional[dict[str, object]]:
     print(f"  color: {color or 'auto'}")
     print(f"  tick coordinates: {ticks or 'OCR auto'}")
     print(f"  axis values: {axis_values or 'OCR auto'}")
+    print(f"  log scale: X={'log' if log_x else 'linear'}, Y={'log' if log_y else 'linear'}")
     print(f"  output directory: {output_dir or 'image folder'}")
     print(f"  normalize y: {'yes' if normalize_y else 'no'}")
     print(f"  limit to calibration: {'yes' if limit_to_calibration else 'no'}")
@@ -740,6 +775,8 @@ def _prompt_values() -> Optional[dict[str, object]]:
         "color": color,
         "ticks": ticks,
         "axis_values": axis_values,
+        "log_x": log_x,
+        "log_y": log_y,
         "output_dir": output_dir or None,
         "normalize_y": normalize_y,
         "limit_to_calibration": limit_to_calibration,

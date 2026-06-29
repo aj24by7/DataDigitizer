@@ -46,6 +46,8 @@ def digitize_image(
     tick_points: Optional[Sequence[Sequence[int | float]]] = None,
     axis_values: Optional[Sequence[int | float]] = None,
     output_dir: str | Path | None = None,
+    log_x: bool = False,
+    log_y: bool = False,
     normalize_y: bool = False,
     limit_to_calibration: bool = True,
     verbose: int = 0,
@@ -54,7 +56,9 @@ def digitize_image(
 
     `tick_points` order is x_min, x_max, y_min, y_max in image pixel
     coordinates. `axis_values` order is x_min, x_max, y_min, y_max in plot
-    coordinates. `verbose` only changes which extra artifacts are written: at
+    coordinates. `log_x` / `log_y` interpolate that axis in base-10 log space
+    (the axis min/max must be positive), mirroring the GUI's per-axis log
+    toggles. `verbose` only changes which extra artifacts are written: at
     `verbose >= 1` a `<image>_log.txt` run record is written alongside the CSV.
     """
 
@@ -101,6 +105,14 @@ def digitize_image(
     else:
         _run_coordinate_calibration(window)
 
+    # Mirror the GUI's per-axis log toggles so the CLI exports the same values.
+    if log_x and (provided_axis[0] <= 0 or provided_axis[1] <= 0):
+        raise DigitizerCliError("Log X scale needs positive X min and X max values.")
+    if log_y and (provided_axis[2] <= 0 or provided_axis[3] <= 0):
+        raise DigitizerCliError("Log Y scale needs positive Y min and Y max values.")
+    window._x_log = bool(log_x)
+    window._y_log = bool(log_y)
+
     window._limit_points_to_calib = bool(limit_to_calibration)
     window._active_color_state().limit_points_to_calib = bool(limit_to_calibration)
     window._export_selected_color_indices = {window._active_color_index}
@@ -144,6 +156,8 @@ def digitize_image(
             elapsed_seconds=elapsed_seconds,
             csv_path=csv_path,
             overlay_path=overlay_path,
+            x_log=bool(log_x),
+            y_log=bool(log_y),
         )
 
     return DigitizerOutputs(
@@ -323,8 +337,10 @@ def _build_export_rows(window: DigitizerWindow, normalize_y: bool) -> tuple[list
             if mapper is not None:
                 x_val, y_val = window._map_pixel_affine(mapper, x_px, y_px)
             else:
-                x_val = x_min_val + (x_px - left) * (x_max_val - x_min_val) / (right - left)
-                y_val = y_min_val + (bottom - y_px) * (y_max_val - y_min_val) / (bottom - top)
+                x_frac = (x_px - left) / (right - left)
+                y_frac = (bottom - y_px) / (bottom - top)
+                x_val = window._interp_axis(x_frac, x_min_val, x_max_val, window._x_log)
+                y_val = window._interp_axis(y_frac, y_min_val, y_max_val, window._y_log)
             row: list[float] = [index + 1, color_r, color_g, color_b, x_val, y_val, x_px, y_px]
             if normalize_y:
                 denom = y_max_val - y_min_val
@@ -412,6 +428,8 @@ def _write_log(
     elapsed_seconds: float,
     csv_path: Path,
     overlay_path: Path,
+    x_log: bool = False,
+    y_log: bool = False,
 ) -> None:
     x_min_pt, x_max_pt, y_min_pt, y_max_pt = tick_points
     x_min, x_max, y_min, y_max = axis_values
@@ -430,6 +448,7 @@ def _write_log(
         f"    y_min tick   : {y_min_pt}",
         f"    y_max tick   : {y_max_pt}",
         f"tick -> values   : x_min={x_min}, x_max={x_max}, y_min={y_min}, y_max={y_max}  ({axis_source})",
+        f"axis scale       : X={'log10' if x_log else 'linear'}, Y={'log10' if y_log else 'linear'}",
         f"OCR confidence   : {conf_text}",
         f"num points       : {point_count}",
         "",

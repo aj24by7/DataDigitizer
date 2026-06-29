@@ -174,11 +174,11 @@ If either message appears, glance at the status bar, go back, and finish that st
 
 ### Log-scale axes (optional)
 
-Most plots are linear, so this is tucked away — but if your graph uses a **logarithmic** X or Y axis, turn it on under **Advanced → Axis Scale (log)**:
+Most plots are linear, so leave this alone for a normal graph — but if your graph uses a **logarithmic** X or Y axis, turn it on with the small **log** toggle buttons that sit just to the **right of the Min-Max Coordinates boxes** (one on the X-min/X-max row, one on the Y-min/Y-max row):
 
-- Tick **Log X axis** and/or **Log Y axis**.
+- Click the **log** button beside the X boxes and/or the one beside the Y boxes. It turns **green** when it's on.
 - Calibrate and enter the axis min/max **as the real numbers printed on the axis** (e.g. `1` and `1000`), exactly as you would for a linear plot.
-- On export, that axis is interpolated in log space, so the values come out correct for a log scale. Leave the boxes unticked for normal linear axes.
+- On export, that axis is interpolated in log space, so the values come out correct for a log scale. Leave the buttons off (grey) for normal linear axes.
 
 > A log axis needs **positive** min/max values (you can't take the log of zero or a negative number). If a value is zero or negative, export will tell you instead of producing wrong numbers.
 
@@ -238,13 +238,15 @@ Add any of these to the command for more control:
 | `--color R,G,B` | Curve color, e.g. `255,0,0` (each part 0–255). Also accepts `[r,g,b]`. **Must match your curve's actual color**, or the run finds no points. | auto-detected |
 | `--axis-values` *(`--axis`)* | Axis numbers as `xmin,xmax,ymin,ymax`. X min must differ from X max, and Y min from Y max. | read by OCR |
 | `--ticks` *(`--tick-setting`, `--tick-coordinates`)* | Four tick pixel points in `x_min,x_max,y_min,y_max` order, e.g. `[10,200],[500,200],[10,200],[10,20]`. | found by OCR |
+| `--log-x` | Read the X axis in base-10 **log** space (X min/max must be positive). Mirrors the GUI's **log** toggle. | off (linear) |
+| `--log-y` | Read the Y axis in base-10 **log** space (Y min/max must be positive). Mirrors the GUI's **log** toggle. | off (linear) |
 | `--output-dir` *(`--out`, `-o`)* | Folder to save into. Created if it doesn't exist. | your Downloads folder |
-| `--normalize-y` | Adds an extra `y_norm` column (Y rescaled to 0–1 over the axis range). | off |
-| `--limit-to-calibration` | Export only points inside the calibration box. **This is the CLI default.** | on |
-| `--no-limit-to-calibration` | Also export points that fall outside the calibration box (matches the GUI default). | not set |
 | `--verbose N` *(`-v`)* | How much to print. `1` (or a bare `-v` / `--verbose`) shows the color, pixel coords, tick→OCR values, point count, and OCR confidence, and writes a `<image>_log.txt`. `0` prints only success + the output folder. | `0` (quiet) |
 | `--json` | Print the result details as JSON instead of plain text. | off |
 | `-h` / `--help` | Show the usage help and exit. | — |
+| `--normalize-y` *(optional extra)* | Adds an extra `y_norm` column (Y rescaled to 0–1 over the axis range). Leave it off for normal use. | off |
+| `--limit-to-calibration` *(optional extra)* | Export only points inside the calibration box. **This is the CLI default.** | on |
+| `--no-limit-to-calibration` *(optional extra)* | Also export points that fall outside the calibration box (matches the GUI default). | not set |
 
 ### The "fill-in-the-blank" template and function-call style
 
@@ -267,7 +269,7 @@ py digitizer.py 'digitizer_cli(pic_dir="graph.png")'
 **Full example** — the `color`, `axis_values`, and `tick_setting` values below are **placeholders you must edit to match your own chart.** A leftover `color=(255,0,0)` (red) on a non-red curve finds no points and exits with *"produced no points."* Either delete the options you don't need (so those values auto-detect) or replace them with your real values:
 
 ```powershell
-py digitizer.py 'digitizer_cli(pic_dir="graph.png", color=(255,0,0), axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), output_dir="C:/Users/You/Downloads/out", normalize_y=False, limit_to_calibration=True, verbose=1, json=False)'
+py digitizer.py 'digitizer_cli(pic_dir="graph.png", color=(255,0,0), axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), log_x=False, log_y=False, output_dir="C:/Users/You/Downloads/out", verbose=1, json=False, normalize_y=False, limit_to_calibration=True)'
 ```
 
 The values you can put inside `digitizer_cli(...)`:
@@ -278,11 +280,13 @@ The values you can put inside `digitizer_cli(...)`:
 | `color` *(`rgb`, `color_rgb`)* | Curve color as `(R,G,B)` or `"255,0,0"`. Blank = auto-detect. Must match your curve's real color. | auto-detected |
 | `tick_setting` *(`ticks`, `tick_coordinates`, `tick_coordinate`)* | Four tick pixel points in `x_min,x_max,y_min,y_max` order. Blank = OCR. | OCR-detected |
 | `axis_values` *(`axis`, `bounds`)* | Axis numbers as `(xmin,xmax,ymin,ymax)`. Blank = OCR. | OCR-detected |
+| `log_x` *(`logx`, `x_log`)* | `True` reads the X axis in base-10 log space (X min/max must be positive). | False |
+| `log_y` *(`logy`, `y_log`)* | `True` reads the Y axis in base-10 log space (Y min/max must be positive). | False |
 | `output_dir` *(`out_dir`, `out`)* | Folder to save into. Blank = Downloads. | Downloads |
-| `normalize_y` *(`normalize`)* | `True` adds the `y_norm` (0–1) column. | False |
-| `limit_to_calibration` *(`limit`)* | `True` keeps only points inside the calibration window. | True |
 | `verbose` *(`v`)* | `1` prints full detail and writes a `<image>_log.txt`; `0` stays quiet. | `0` |
 | `json` *(`as_json`, `print_json`)* | `True` prints full details as JSON. **Only accepted in this function-call form** (the flag version is `--json`). | False |
+| `normalize_y` *(`normalize`)* — *optional extra* | `True` adds the `y_norm` (0–1) column. Leave off for normal use. | False |
+| `limit_to_calibration` *(`limit`)* — *optional extra* | `True` keeps only points inside the calibration window. | True |
 
 Arguments can be **positional** in the order `pic_dir, color, tick_setting, axis_values, output_dir`, or by **name** using any alias above. Empty positions are allowed and fall back to defaults, and the words `none` / `null` / blank are treated as "auto".
 
@@ -306,10 +310,10 @@ Force a specific curve color — **change `130,5,255` to your curve's real R,G,B
 py digitizer.py graph.png --color 130,5,255 --axis 0,10,0,100
 ```
 
-Use a full path, choose an output folder, and add the normalized-Y column:
+Use a full path, choose an output folder, and read the Y axis on a **log scale**:
 
 ```powershell
-py digitizer.py "C:\path\to\graph.png" --out "C:\path\to\out" --normalize-y
+py digitizer.py "C:\path\to\graph.png" --out "C:\path\to\out" --log-y
 ```
 
 See everything the run worked out — color, pixel coordinates, the tick→OCR values, point count, and the **OCR confidence score** — and drop a `log.txt` alongside the output:

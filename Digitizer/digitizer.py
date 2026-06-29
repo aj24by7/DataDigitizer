@@ -20,12 +20,14 @@ Add any of these for more control:
   --color  R,G,B        curve color (default: auto-detected)
   --axis   xmin,xmax,ymin,ymax   axis values (default: read by OCR)
   --ticks  [x,y],[x,y],[x,y],[x,y]   tick pixel points: x_min,x_max,y_min,y_max
+  --log-x               read the X axis on a base-10 log scale (X min/max > 0)
+  --log-y               read the Y axis on a base-10 log scale (Y min/max > 0)
   --out    FOLDER       where to save output (default: Downloads)
-  --normalize-y         add a 0-1 normalized Y column to the CSV
   --verbose N (or -v)   N=1 shows full detail (color, pixel coords, tick->OCR,
                         points, OCR confidence) and writes a <image>_log.txt;
                         N=0 (default) prints only success + the output folder
   --json                print the result details as JSON
+  --normalize-y         (optional) add a 0-1 normalized Y column to the CSV
 
 Examples:
 

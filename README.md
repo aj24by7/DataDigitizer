@@ -391,7 +391,9 @@ py digitizer.py "C:\path\to\my_images" --output-dir "C:\path\to\results"
 ```
 
 Every option from the [table above](#options) still applies and is used for **all** images
-in the folder — so `--color 0,0,0` means "every curve in this folder is black".
+in the folder — so `--color 0,0,0` means "every curve in this folder is black". The two
+exceptions are `--pic-dir` (the folder is the positional argument here) and `--json` (batch
+already writes machine-readable `batch_report.json`); both are rejected by the batch parser.
 
 ### What batch mode gives you
 
@@ -468,6 +470,15 @@ Two traps worth knowing, because the raw CSV will happily print a number in both
 
 You'll need a **recent Python 3** installed (from <https://python.org> — tick *"Add python.exe to PATH"* during setup).
 
+> **OCR needs the Tesseract program, not just the Python package.** `requirements.txt`
+> installs `pytesseract`, which is only a *wrapper* — it cannot read anything on its own.
+> For axis detection to work from source, install **Tesseract 5.5 for Windows** (the UB
+> Mannheim build) and let the installer add it to your PATH, or set `TESSERACT_CMD` to its
+> full path. Without it, `py digitizer.py graph.png` stops with
+> *"Tesseract OCR executable not found"*. Passing `--axis` is **not** enough on its own —
+> tick *positions* are still read by OCR, so you would need `--ticks` as well. The prebuilt
+> `Digitizer.exe` from Releases has Tesseract bundled and needs none of this.
+
 1. Get the source code — download it from the [repo](https://github.com/aj24by7/DataDigitizer) or clone it:
 
    ```powershell
@@ -504,14 +515,16 @@ The project is plain Python (a PyQt6 GUI plus a small CLI). There are three "sha
 
 ### Before you build from a fresh clone
 
-The bundled OCR runtime under `Digitizerendor	esseract` is **not committed to this
+The bundled OCR runtime under `Digitizer\vendor\tesseract` is **not committed to this
 repository** — it is a third-party binary distribution of ~83 MB with its own licence, so it
-is excluded by `.gitignore`. A fresh clone will not have it, and the build will fail
-without it.
+is excluded by `.gitignore`. A fresh clone will not have it. The build still succeeds, but it
+prints a loud warning and the resulting exe has **no OCR** -- axis detection will not work for
+anyone you hand it to, even though it may appear to work on your own machine if you have
+Tesseract installed separately.
 
 To restore it, install **Tesseract 5.5 for Windows** (the UB Mannheim build) and copy the
 installed folder — `tesseract.exe`, its DLLs, and `tessdata` — to
-`Digitizerendor	esseract`. This repo was built against `tesseract v5.5.0.20241111`
+`Digitizer\vendor\tesseract`. This repo was built against `tesseract v5.5.0.20241111`
 with leptonica 1.85.0.
 
 If you only want to **run from source** rather than build the exe, you do not need this:
@@ -589,9 +602,12 @@ Calibration.py      # Calibration strategies
 Masking.py          # OCR / manual masking helpers
 ErrorLogger.py      # Error logging utilities
 digitizer.spec      # PyInstaller spec (Digitizer.exe)
+build.cmd           # One-click build (double-click this)
 build_windows.ps1   # Build script
 requirements.txt    # Python dependencies
-version.json        # App name + version
+requirements-dev.txt# Test-only deps (pytest)
+version.json        # App name + version (read at runtime by app_version.py)
+app_version.py      # Single source of truth for the version string
 test_calibration.py # Tests for the axis-pair repair in calibration
 assets/             # Application icon
 vendor/tesseract/   # Bundled Tesseract OCR runtime

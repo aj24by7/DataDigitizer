@@ -56,7 +56,11 @@ ignored file is reported rather than silently skipped.
 
 ## Tests
 
+The tests check the scoring maths against scipy and scikit-learn as independent
+references, so they need a few packages the app itself does not:
+
 ```powershell
+py -m pip install -r requirements-dev.txt
 py -m pytest test_accuracy_core.py test_batch_scoring.py -q
 ```
 
@@ -78,6 +82,7 @@ batch_scoring.py         # File matching + pair scoring for batch runs
 accuracy_batch_cli.py    # Batch CLI entry point
 test_accuracy_core.py    # Tests for the scoring maths
 test_batch_scoring.py    # Tests for file matching + pair scoring
+requirements-dev.txt     # Test-only deps (pytest, scipy, scikit-learn)
 accuracytester.spec      # PyInstaller spec (AccuracyTester.exe)
 build_windows.ps1        # Build script
 requirements.txt         # Python dependencies

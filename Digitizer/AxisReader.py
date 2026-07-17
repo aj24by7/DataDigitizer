@@ -82,8 +82,8 @@ def detect_axis_scale(image: QtGui.QImage) -> AxisScaleResult:
     x_cluster = _select_best_cluster(_cluster_by_band(all_numbers, axis="y", tol=10), axis_range="x")
     y_cluster = _select_best_cluster(_cluster_by_band(all_numbers, axis="x", tol=10), axis_range="y")
 
-    x_min_val, x_max_val, x_min_det, x_max_det = _min_max_from_cluster(x_cluster, axis="x")
-    y_min_val, y_max_val, y_min_det, y_max_det = _min_max_from_cluster(y_cluster, axis="y")
+    x_min_val, x_max_val, x_min_det, x_max_det = _robust_endpoints(x_cluster, axis="x")
+    y_min_val, y_max_val, y_min_det, y_max_det = _robust_endpoints(y_cluster, axis="y")
 
     overlay_numbers = all_numbers
     overlay_points = [det.center for det in overlay_numbers]
@@ -184,7 +184,10 @@ def _preprocess_for_ocr(image: "Image.Image") -> "Image.Image":
 
 
 def _extract_numbers(image: "Image.Image") -> List[DetectedNumber]:
-    config = "--psm 6 -c tessedit_char_whitelist=0123456789.-+"
+    # Whitelist digits, sign, decimal point, and comma. The comma lets a thousands
+    # separator ("1,000") come through as one token instead of being split; it is
+    # stripped in _parse_number. (Axis labels are numbers, so no letters are allowed.)
+    config = "--psm 6 -c tessedit_char_whitelist=0123456789.-+,"
     data = pytesseract.image_to_data(image, output_type=Output.DICT, config=config)
     results: list[DetectedNumber] = []
     count = len(data.get("text", []))
@@ -216,7 +219,10 @@ def _extract_numbers(image: "Image.Image") -> List[DetectedNumber]:
 
 
 def _parse_number(text: str) -> Optional[float]:
-    match = re.search(r"[-+]?\d*\.?\d+", text)
+    # Drop a thousands separator between digits ("1,000" -> "1000"); accept optional
+    # scientific-notation exponent ("1.5e4") if the OCR produced one.
+    cleaned = re.sub(r"(?<=\d),(?=\d)", "", text)
+    match = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", cleaned)
     if not match:
         return None
     try:
@@ -296,6 +302,95 @@ def _min_max_from_cluster(
     ordered = sorted(cluster, key=lambda n: n.center[1])
     # larger y is lower on screen -> y min at bottom
     return ordered[-1].value, ordered[0].value, ordered[-1], ordered[0]
+
+
+def _line_inliers(
+    positions: List[float],
+    values: List[float],
+    use_log: bool,
+    prefer_sign: int,
+) -> Optional[Tuple[int, int, List[int]]]:
+    """Find the largest set of ticks whose (pixel position -> read value) lie on one
+    straight line (or log line, if use_log), via pair-consensus (RANSAC over every
+    pair of ticks). Returns (num_inliers, orientation_matches, inlier_indices) or None.
+
+    `prefer_sign` is the expected sign of value-vs-pixel slope (+1 for X, where value
+    grows rightward; -1 for Y, where value grows upward as pixel-y shrinks). It breaks
+    ties toward the normal axis orientation, which is what lets a single misread be
+    dropped even when only three ticks are present (median-slope fitting can't, because
+    one bad tick out of three exceeds its breakdown point).
+    """
+    import math
+
+    n = len(values)
+    if use_log:
+        if any(v <= 0 for v in values):
+            return None
+        ys = [math.log10(v) for v in values]
+    else:
+        ys = list(values)
+    span = max(ys) - min(ys)
+    if span <= 0:
+        return None
+    thr = 0.15 * span  # a misread label lands far outside 15% of the axis span
+    best: Optional[Tuple[Tuple[int, int, float], List[int]]] = None
+    for i in range(n):
+        for j in range(i + 1, n):
+            dp = positions[j] - positions[i]
+            if abs(dp) < 1e-9:
+                continue
+            slope = (ys[j] - ys[i]) / dp
+            intercept = ys[i] - slope * positions[i]
+            resid = [abs(ys[k] - (slope * positions[k] + intercept)) for k in range(n)]
+            inliers = [k for k in range(n) if resid[k] <= thr]
+            orient = 1 if slope * prefer_sign > 0 else 0
+            total_resid = sum(r for r in resid if r <= thr)
+            key = (len(inliers), orient, -total_resid)
+            if best is None or key > best[0]:
+                best = (key, inliers)
+    if best is None:
+        return None
+    (num, orient, _), inliers = best
+    return num, orient, inliers
+
+
+def _robust_endpoints(
+    cluster: List[DetectedNumber],
+    axis: str,
+) -> Tuple[Optional[float], Optional[float], Optional[DetectedNumber], Optional[DetectedNumber]]:
+    """Pick the axis min/max from the two extreme *consistent* ticks.
+
+    A tick's value must sit on a straight (or log) line vs its pixel position, so
+    a single misread label (e.g. a negative "-5" read as "9", or a decimal misread)
+    is rejected as an outlier and the scale is taken from the ticks that agree.
+    Falls back to the raw extremes when there are too few ticks to vote (<3) or no
+    consistent pair is found. The two returned ticks anchor the calibration scale,
+    so dropping a misread endpoint still yields the correct mapping by extrapolation.
+    """
+    if len(cluster) < 3:
+        return _min_max_from_cluster(cluster, axis)
+    positions = [(n.center[0] if axis == "x" else n.center[1]) for n in cluster]
+    values = [n.value for n in cluster]
+    prefer_sign = 1 if axis == "x" else -1
+    linear = _line_inliers(positions, values, use_log=False, prefer_sign=prefer_sign)
+    logarithmic = _line_inliers(positions, values, use_log=True, prefer_sign=prefer_sign)
+    best = linear
+    if logarithmic is not None and (best is None or logarithmic[0] > best[0]):
+        best = logarithmic
+    if best is None:
+        return _min_max_from_cluster(cluster, axis)
+    inliers = best[2]
+    # Only override the raw reading when a clear ~2/3 SUPERMAJORITY of ticks agree on
+    # one ladder, so a *minority* of misreads gets dropped. A bare majority is not
+    # enough: a few misread labels can coincidentally line up, and when the true
+    # values are unrecoverable (e.g. a dropped minus sign, or mostly-misread log
+    # labels) there is no trustworthy consensus -- keep the raw extremes rather than
+    # risk an even worse guess.
+    need = max(3, (2 * len(cluster) + 2) // 3)
+    if len(inliers) < need or len(inliers) == len(cluster):
+        return _min_max_from_cluster(cluster, axis)
+    kept = [cluster[i] for i in sorted(inliers)]
+    return _min_max_from_cluster(kept, axis)
 
 
 def _map_rotated_number_to_original(det: DetectedNumber, original_height: int) -> DetectedNumber:

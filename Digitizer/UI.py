@@ -1640,16 +1640,75 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.image_tray.set_calibration_overlays(result.points(), result.box)
         self.status_label.setText("Line-mediated calibration complete.")
 
+    # Auto colour pick: a bucket must be at least this saturated (max(RGB)-min(RGB),
+    # 0-255) to be treated as the curve colour. Grid lines, axes, and grey UI
+    # artefacts are near-zero saturation, so they can out-number a thin coloured
+    # curve on pixel count; requiring saturation skips them and finds the curve.
+    _MIN_AUTO_SATURATION = 40
+
     def _auto_select_color(self, image: QtGui.QImage) -> Optional[Tuple[int, int, int]]:
         palette = self._analyze_palette(image)
         self._palette_summary = palette
         if not palette:
             return None
+        # First pass: the most frequent *saturated* colour (skips white/black/grey).
+        # This is what lets a thin coloured line win over grey grid lines that cover
+        # far more pixels.
+        for rgb, _pct in palette:
+            if self._is_near_white(rgb) or self._is_near_black(rgb):
+                continue
+            if self._color_saturation(rgb) >= self._MIN_AUTO_SATURATION:
+                return rgb
+        # Second pass: the strided palette sampler can miss a very thin line entirely,
+        # so no saturated bucket appears above. Scan every pixel for the dominant
+        # saturated colour before giving up.
+        scanned = self._dominant_saturated_color(image)
+        if scanned is not None:
+            return scanned
+        # Fallback: no saturated colour anywhere (e.g. a genuinely grey/black-on-white
+        # curve). Keep the original behaviour -- the most frequent non-white/black.
         for rgb, _pct in palette:
             if self._is_near_white(rgb) or self._is_near_black(rgb):
                 continue
             return rgb
         return None
+
+    @staticmethod
+    def _color_saturation(rgb: Tuple[int, int, int]) -> int:
+        """Chroma proxy: spread between the RGB channels. 0 for any grey."""
+        return max(rgb) - min(rgb)
+
+    def _dominant_saturated_color(self, image: QtGui.QImage) -> Optional[Tuple[int, int, int]]:
+        """Most common sufficiently-saturated colour across EVERY pixel (no striding),
+        so a hairline curve the palette sampler skipped is still found. Returns None if
+        no saturated pixels exist or numpy is unavailable."""
+        try:
+            import numpy as np
+        except ImportError:
+            return None
+        if image.isNull():
+            return None
+        if image.format() != QtGui.QImage.Format.Format_RGB888:
+            image = image.convertToFormat(QtGui.QImage.Format.Format_RGB888)
+        width = image.width()
+        height = image.height()
+        bytes_per_line = image.bytesPerLine()
+        bits = image.bits()
+        bits.setsize(bytes_per_line * height)
+        arr = np.frombuffer(bytes(bits), dtype=np.uint8).reshape(height, bytes_per_line)
+        arr = arr[:, : width * 3].reshape(height, width, 3).astype(np.int16)
+        sat = arr.max(axis=2) - arr.min(axis=2)
+        mask = sat >= self._MIN_AUTO_SATURATION
+        if not mask.any():
+            return None
+        pixels = arr[mask]
+        # Group into 16-wide buckets, take the most common bucket, return its mean.
+        buckets = pixels // 16
+        keys = buckets[:, 0] * 256 + buckets[:, 1] * 16 + buckets[:, 2]
+        values, counts = np.unique(keys, return_counts=True)
+        best_key = values[counts.argmax()]
+        chosen = pixels[keys == best_key].mean(axis=0)
+        return int(round(chosen[0])), int(round(chosen[1])), int(round(chosen[2]))
 
     def _analyze_palette(self, image: QtGui.QImage) -> list[Tuple[Tuple[int, int, int], float]]:
         if image.isNull():

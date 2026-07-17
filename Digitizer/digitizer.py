@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from digitizer_2_11 import configure_runtime_paths
 
@@ -44,10 +45,38 @@ Print a fill-in-the-blank template with every option:
 
   py digitizer.py template
 
+Digitize a whole FOLDER of images at once (batch mode). Give a folder instead of
+a file and every image in it is digitized; outputs land in two subfolders inside
+that folder (digitized_csvs/ and digitized_overlays/) plus a batch_report:
+
+  py digitizer.py C:\\charts
+  py digitizer.py batch C:\\charts --output-dir D:\\results
+
 To open the graphical app instead:
 
   py digitizer_2_11.py
 """
+
+
+def _first_positional(args: list[str]) -> str | None:
+    """First argument that is not an option flag or its value (used to sniff a folder)."""
+    skip_next = False
+    for token in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if token.startswith("-"):
+            # options that take a separate value; skip the value so it is not mistaken
+            # for the positional path
+            if "=" not in token and token in {
+                "--color", "--ticks", "--tick-setting", "--tick-coordinates",
+                "--axis-values", "--axis", "--output-dir", "--out", "-o",
+                "--pic-dir", "-v", "--verbose",
+            }:
+                skip_next = True
+            continue
+        return token
+    return None
 
 
 if __name__ == "__main__":
@@ -61,6 +90,18 @@ if __name__ == "__main__":
 
         print_template()
         raise SystemExit(0)
+
+    # Batch mode: an explicit `batch` keyword, or a positional argument that is a
+    # folder. A single image file falls through to the normal single-image CLI.
+    if args[0] in {"batch", "--batch"}:
+        from digitizer_batch_cli import main as batch_main
+
+        raise SystemExit(batch_main(args[1:]))
+    first = _first_positional(args)
+    if first is not None and Path(first).expanduser().is_dir():
+        from digitizer_batch_cli import main as batch_main
+
+        raise SystemExit(batch_main(args))
 
     from digitizer_cli import main as cli_main
 

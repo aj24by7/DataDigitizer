@@ -37,7 +37,7 @@ class ColorSlotOption:
 class AccuracyTesterPro:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Accuracy Tester Pro - Robust CSV Comparison")
+        self.root.title("Data Digitizer - Accuracy Tester")
         self.root.geometry("1180x840")
 
         self.original_df: Optional[pd.DataFrame] = None
@@ -68,8 +68,9 @@ class AccuracyTesterPro:
 
         ttk.Label(
             main,
-            text="Accuracy Tester Pro (Original vs Digitized/Synthesized)",
+            text="Data Digitizer  ·  Accuracy Tester",
             font=("Arial", 15, "bold"),
+            foreground="#1a7f37",  # matches the Data Digitizer accent green
         ).grid(row=0, column=0, columnspan=2, sticky="w")
 
         self.status_var = tk.StringVar(value=self.initial_status_text)

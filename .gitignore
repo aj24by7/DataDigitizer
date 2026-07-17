@@ -6,3 +6,7 @@ dist/
 vendor/
 logs/
 .venv/
+.pytest_cache/
+*.egg-info/
+Thumbs.db
+.DS_Store

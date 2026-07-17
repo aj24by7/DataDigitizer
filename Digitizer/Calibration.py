@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -83,6 +84,22 @@ def coordinate_mediated_calibration(
     x_max = snap_up(x_max_point)
     y_min = snap_right(y_min_point)
     y_max = snap_right(y_max_point)
+
+    # A snap can land on the wrong line entirely: exclude_rects hides every OCR text bbox,
+    # and an oversized/misplaced one (the rotated y-label pass produces these) can cover the
+    # real axis under a tick label, sending snap_up past it to the top spine. The pair then
+    # spans a diagonal instead of the axis, and _build_affine_mapper skews the whole frame.
+    # The mapper only needs each pair to be PARALLEL to its axis (a constant offset of the
+    # line cancels out of the u/v solve), so pairs that already agree are left untouched.
+    rows, cols = _axis_line_bands(bytes_data, width, height, bytes_per_line, black_threshold)
+    x_min, x_max = _repair_axis_pair(
+        x_min, x_max, x_min_point, x_max_point, rows, 1, height, "up",
+        bytes_data, bytes_per_line, width, height, black_threshold,
+    )
+    y_min, y_max = _repair_axis_pair(
+        y_min, y_max, y_min_point, y_max_point, cols, 0, width, "right",
+        bytes_data, bytes_per_line, width, height, black_threshold,
+    )
 
     # Draw the dashed calibration window from the RAW (un-snapped) input points, exactly
     # the way manual calibration builds it from the four clicked points. The snapped
@@ -188,6 +205,160 @@ def _snap_to_black(
             if _is_black(data, bytes_per_line, start_x, y, threshold):
                 return (start_x, y)
     return None
+
+
+# A row/column must be dark across this fraction of the image to count as an axis line.
+_AXIS_LINE_COVERAGE = 0.5
+# A plain frame has at most 4 such bands per orientation. More than that means we are not
+# looking at a frame (black gridlines, a filled region, a dark photo), so the line evidence
+# is not trustworthy and arbitration falls through to snap travel instead.
+_MAX_FRAME_BANDS = 4
+# Tilt between a tick pair beyond which the pair cannot be a scanned/rotated axis and one
+# of the two snaps must have stopped on the wrong line.
+_MAX_TILT_DEG = 6.0
+
+
+def _axis_line_bands(
+    data: bytes,
+    width: int,
+    height: int,
+    bytes_per_line: int,
+    threshold: int,
+) -> Tuple[List[int], List[int]]:
+    """Find full-length dark rows/columns (plot spines), one representative each.
+
+    Returns ([], []) when numpy is unavailable or nothing qualifies; callers must treat
+    that as "no evidence" and fall back, never as a failure.
+    """
+    if np is None:
+        return [], []
+    try:
+        flat = np.frombuffer(data, dtype=np.uint8)
+        rows_view = flat.reshape((height, bytes_per_line))
+        rgb = rows_view[:, : width * 3].reshape((height, width, 3))
+        mask = np.all(rgb <= threshold, axis=2)
+    except ValueError:  # pragma: no cover - defensive against odd strides
+        return [], []
+    rows = _bands(np.where(mask.sum(axis=1) >= _AXIS_LINE_COVERAGE * width)[0].tolist())
+    cols = _bands(np.where(mask.sum(axis=0) >= _AXIS_LINE_COVERAGE * height)[0].tolist())
+    return rows, cols
+
+
+def _bands(indices: List[int]) -> List[int]:
+    """Collapse runs of adjacent indices (an axis line is a few pixels thick) to a midpoint."""
+    if not indices:
+        return []
+    out: List[int] = []
+    run = [indices[0]]
+    for value in indices[1:]:
+        if value - run[-1] <= 2:
+            run.append(value)
+        else:
+            out.append(run[len(run) // 2])
+            run = [value]
+    out.append(run[len(run) // 2])
+    return out
+
+
+def _repair_axis_pair(
+    a: Optional[Tuple[int, int]],
+    b: Optional[Tuple[int, int]],
+    a_start: Optional[Tuple[float, float]],
+    b_start: Optional[Tuple[float, float]],
+    bands: List[int],
+    comp: int,
+    span: int,
+    direction: str,
+    data: bytes,
+    bytes_per_line: int,
+    width: int,
+    height: int,
+    threshold: int,
+) -> Tuple[Optional[Tuple[int, int]], Optional[Tuple[int, int]]]:
+    """Force a tick pair back onto a common row (comp=1) or column (comp=0).
+
+    Fires only when the pair is tilted far past anything a real scan could produce, i.e.
+    when one snap demonstrably stopped on the wrong line. A mild tilt is left alone: the
+    affine mapper handles genuinely rotated plots, and clobbering that would be a
+    regression. Anything ambiguous is returned untouched.
+    """
+    if a is None or b is None:
+        return a, b
+    other = 1 - comp
+    run = abs(a[other] - b[other])
+    if run < max(8, 0.02 * span):
+        return a, b  # ticks too close together for the tilt to mean anything
+    if math.degrees(math.atan2(abs(a[comp] - b[comp]), run)) <= _MAX_TILT_DEG:
+        return a, b
+
+    project_tol = max(4, int(round(0.01 * span)))
+    line_tol = max(15, int(round(0.03 * span)))
+    a_good: Optional[bool] = None
+
+    if bands and len(bands) <= _MAX_FRAME_BANDS:
+        # Ask each point whether it stopped at the line it SHOULD have hit: the first band
+        # lying in its own scan direction. Merely being near some band is not evidence — a
+        # snap that overshoots to the far spine is also "near a band".
+        def on_expected(point: Tuple[int, int], start: Optional[Tuple[float, float]]) -> Optional[bool]:
+            if start is None:
+                return None
+            origin = int(round(start[comp]))
+            ahead = [n for n in bands if (n <= origin if direction == "up" else n >= origin)]
+            if not ahead:
+                return None
+            expected = max(ahead) if direction == "up" else min(ahead)
+            return abs(point[comp] - expected) <= line_tol
+
+        near_a = on_expected(a, a_start)
+        near_b = on_expected(b, b_start)
+        if near_a is not None and near_b is not None and near_a != near_b:
+            a_good = near_a
+
+    if a_good is None and a_start is not None and b_start is not None:
+        # No usable line evidence: the point that snapped a short way from its own tick
+        # label is the plausible one; a snap that ran a long way crossed the axis it wanted.
+        travel_a = abs(a[comp] - int(round(a_start[comp])))
+        travel_b = abs(b[comp] - int(round(b_start[comp])))
+        if abs(travel_a - travel_b) > line_tol:
+            a_good = travel_a < travel_b
+
+    if a_good is None:
+        # Past the tilt gate one of these IS wrong, and the pair only has to end up
+        # parallel to the axis — the mapper cancels a constant offset of the line, so an
+        # arbitrary-but-consistent choice still maps correctly. Keep the first point.
+        a_good = True
+
+    winner, loser = (a, b) if a_good else (b, a)
+    fixed = _project_onto_line(
+        loser, winner[comp], comp, project_tol, data, bytes_per_line, width, height, threshold
+    )
+    return (winner, fixed) if a_good else (fixed, winner)
+
+
+def _project_onto_line(
+    point: Tuple[int, int],
+    target: int,
+    comp: int,
+    tol: int,
+    data: bytes,
+    bytes_per_line: int,
+    width: int,
+    height: int,
+    threshold: int,
+) -> Tuple[int, int]:
+    """Move point's comp coordinate to target, preferring the nearest dark pixel within tol."""
+    def at(value: int) -> Tuple[int, int]:
+        return (point[0], value) if comp == 1 else (value, point[1])
+
+    limit = height if comp == 1 else width
+    for offset in range(0, tol + 1):
+        for candidate in ({target - offset, target + offset} if offset else {target}):
+            if not 0 <= candidate < limit:
+                continue
+            x, y = at(candidate)
+            if _is_black(data, bytes_per_line, x, y, threshold):
+                return (x, y)
+    return at(target)
 
 
 def _find_black_border_box(

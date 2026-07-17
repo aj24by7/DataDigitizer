@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -16,6 +17,10 @@ from UI import DigitizerWindow
 Point = Tuple[int, int]
 AxisValues = Tuple[float, float, float, float]
 ColorRgb = Tuple[int, int, int]
+
+# Below this mean OCR confidence (%), a low-confidence axis read is warned about
+# (but never blocked -- see the C1 warning in digitize_image).
+_LOW_AXIS_CONFIDENCE = 55.0
 
 
 class DigitizerCliError(RuntimeError):
@@ -140,6 +145,19 @@ def digitize_image(
     tick_points = _current_tick_points(window)
     ocr_confidence = _detection_confidence(window) if used_ocr else None
     elapsed_seconds = round(time.perf_counter() - start, 3)
+
+    # C1: a generous, non-blocking warning. When the axes were auto-detected and the
+    # OCR confidence is low, the axis values are the most likely thing to be wrong
+    # (a misread tick silently rescales every point). Warn so the number gets a second
+    # look -- but still return the result, since a low score is not always a wrong read.
+    if used_ocr and ocr_confidence is not None and ocr_confidence < _LOW_AXIS_CONFIDENCE:
+        print(
+            f"WARNING: axis auto-detection confidence is low ({ocr_confidence:.0f}%). "
+            f"The detected axis values (x: {provided_axis[0]}..{provided_axis[1]}, "
+            f"y: {provided_axis[2]}..{provided_axis[3]}) may be misread -- please verify "
+            f"them, or pass explicit axis values. Digitization still ran.",
+            file=sys.stderr,
+        )
 
     log_path: Optional[Path] = None
     if verbose >= 1:
@@ -298,7 +316,15 @@ def _run_coordinate_calibration(window: DigitizerWindow) -> None:
         raise DigitizerCliError("Axis OCR did not find all tick point positions needed for calibration.")
     window.run_coordinate_calibration()
     if window._calibration_result is None or window._get_axis_points() is None:
-        raise DigitizerCliError(window.status_label.text() or "Coordinate-mediated calibration failed.")
+        # Report the actual failure, not window.status_label.text() -- on this path the
+        # label can still hold the "calibration complete" success string, which is
+        # misleading. The real cause is that snap-to-black could not locate all four
+        # axis tick points from the OCR positions.
+        raise DigitizerCliError(
+            "Coordinate calibration could not locate all four axis tick points "
+            "(automatic snap-to-black failed near the detected tick labels). Check that "
+            "the axis lines are dark and unbroken, or pass explicit --ticks / --axis values."
+        )
 
 
 def _build_export_rows(window: DigitizerWindow, normalize_y: bool) -> tuple[list[str], list[list[float]]]:

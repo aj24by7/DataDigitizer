@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app_version import APP_NAME, APP_TITLE, APP_VERSION
+
 import os
 import sys
 from pathlib import Path
@@ -110,7 +112,7 @@ def print_help() -> None:
     print(
         "\n".join(
             [
-                "Data Digitizer 2.13",
+                APP_TITLE,
                 "",
                 "Open the graphical app:",
                 "  double-click Digitizer.exe   (or from source: py digitizer_2_11.py)",
@@ -175,8 +177,8 @@ def _looks_like_cli_invocation(args: list[str]) -> bool:
 def _user_app_data_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA")
     if base:
-        return Path(base) / "DataDigitizer" / "2.13"
-    return Path.home() / ".datadigitizer" / "2.13"
+        return Path(base) / APP_NAME / APP_VERSION
+    return Path.home() / f".{APP_NAME.lower()}" / APP_VERSION
 
 
 def _resolve_tesseract_cmd(bundle_root: Path) -> Path | None:

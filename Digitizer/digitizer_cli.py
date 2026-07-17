@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+from app_version import APP_TITLE
 from digitizer_api import DigitizerCliError, DigitizerOutputs, digitize_image
 
 
@@ -85,7 +86,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 def interactive_main() -> int:
     print()
-    print("Data Digitizer 2.13 Interactive CLI")
+    print(f"{APP_TITLE} Interactive CLI")
     print("Leave optional fields blank and press Enter to use auto/default behavior.")
     print()
 
@@ -271,7 +272,7 @@ def print_function_call_usage() -> None:
     print(
         "\n".join(
             [
-                "Data Digitizer 2.13 CLI",
+                f"{APP_TITLE} CLI",
                 "",
                 "Use one quoted function-call line:",
                 "  py digitizer.py 'digitizer_cli(pic_dir=\"C:\\Users\\User\\Pictures\\Screenshots\\Example 2.png\", output_dir=\"C:\\Users\\User\\Downloads\\testcli\")'",

@@ -11,6 +11,7 @@ from typing import Optional, Sequence, Tuple
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from app_version import APP_TITLE
 from UI import DigitizerWindow
 
 
@@ -462,7 +463,7 @@ def _write_log(
     axis_source = "OCR" if used_ocr else "provided manually"
     conf_text = f"{ocr_confidence:.1f}%" if ocr_confidence is not None else "n/a (axes not read by OCR)"
     lines = [
-        "Data Digitizer 2.13 - run log",
+        f"{APP_TITLE} - run log",
         f"time             : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"elapsed (s)      : {elapsed_seconds:.2f}",
         f"image            : {image_path}",

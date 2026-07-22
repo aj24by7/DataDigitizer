@@ -80,6 +80,37 @@ To run it:
 
 You'll only need to do this once.
 
+### Nothing happens at all when you double-click? (Smart App Control)
+
+If double-clicking `Digitizer.exe` produces **no window, no error, no warning box** -- just
+nothing -- you are almost certainly running into **Smart App Control**, which is **on by
+default on new Windows 11 installations**. It is stricter than SmartScreen: where
+SmartScreen warns and offers *Run anyway*, Smart App Control blocks unsigned programs
+**silently**. There is no dialog and no *Run anyway* button, so the app simply appears to
+do nothing.
+
+**How to confirm it:** open **Windows Security -> App & browser control -> Smart App
+Control**. If it says **On**, that is what is stopping the app. You can also check
+**Event Viewer -> Applications and Services Logs -> Microsoft -> Windows -> CodeIntegrity
+-> Operational** for a *"Smart App Control Block"* entry naming `Digitizer.exe`.
+
+**What you can do:**
+
+- **Run it from source instead (recommended, no downsides).** This is not blocked, because
+  Python itself is signed. See [Run from source](#run-from-source-for-developers), then
+  **double-click `Digitizer.pyw`** -- it opens the same GUI with no console window. This is
+  the best option if you already have Python.
+- **Ask for a signed build.** The only real fix is for the app to be code-signed with a
+  certificate. Until then, Smart App Control will keep blocking it on machines where it is
+  enabled.
+- **Turning Smart App Control off** does allow the app to run, but think carefully first:
+  > **This is a one-way door.** Microsoft does not let you turn Smart App Control back on
+  > once it is off -- re-enabling it requires **resetting or reinstalling Windows**. It
+  > also lowers protection for *every* program on the machine, not just this one. Prefer
+  > running from source above.
+
+This is not specific to version 2.14 -- it affects every unsigned release equally.
+
 ---
 
 ## Using the app (step by step)
@@ -496,6 +527,13 @@ You'll need a **recent Python 3** installed (from <https://python.org> — tick 
    ```powershell
    py digitizer_2_11.py
    ```
+
+   Or just **double-click `Digitizer.pyw`** in the `Digitizer` folder. That opens the same
+   window with **no console/command prompt behind it**, so it behaves like a normal desktop
+   app -- and because it loads the source directly, it always reflects the current code with
+   no rebuild. This is also the way to run the app if
+   [Smart App Control](#nothing-happens-at-all-when-you-double-click-smart-app-control) is
+   blocking the `.exe`.
 
 The command-line interface ([above](#using-the-command-line)) also runs from this same source setup.
 

@@ -3,6 +3,41 @@
 All notable changes to this project are documented here. Versions follow the release tags
 on GitHub; download the apps from the [Releases page](https://github.com/aj24by7/DataDigitizer/releases/latest).
 
+## Unreleased
+
+### Changed
+
+- **Exported points are no longer limited to the calibration box by default.** The box is
+  built from the tick positions OCR found, so an outermost tick read even slightly short
+  makes the box smaller than the real plot area -- and limiting to it silently clips real
+  data off the ends of the curve. On `example_3_corundum_raman.png` it kept **81 of 930
+  points**, discarding 91% of the spectrum with no error.
+
+  The GUI already defaulted to off, but the CLI, the batch CLI and the `digitize_image()`
+  API each defaulted to **on**, so the same image produced different data depending on how
+  you ran it. All four now agree. `--limit-to-calibration` still turns it on deliberately,
+  and `--no-limit-to-calibration` is kept as an explicit no-op so existing scripts and
+  documented commands keep working unchanged. `test_defaults.py` locks all four entry
+  points together.
+
+### Fixed
+
+- The exe is blocked silently by **Smart App Control** on Windows 11 (on by default for new
+  installs) because it is unsigned -- double-clicking does nothing at all, with no dialog.
+  The docs previously described only the SmartScreen *"Run anyway"* flow, which never
+  appears under Smart App Control. Documented how to identify it and pointed at
+  `Digitizer.pyw` as the working alternative. The real fix is code-signing.
+- The "where to put Tesseract" instructions had their path corrupted to
+  `Digitizer<VT>endor<TAB>esseract` by unescaped backslashes, making the only guidance for a
+  required manual step unreadable.
+- The build claimed it would fail without `vendor/tesseract`; it silently produced an exe
+  with no OCR instead. It now warns loudly.
+- The version was hardcoded in six files, so 2.14 reported itself as 2.13 everywhere
+  user-visible, including the `%LOCALAPPDATA%\DataDigitizer\<version>\logs` path the README
+  documents. `version.json` is now read at runtime and is the single source of truth.
+- The documented test command could not run from the declared dependencies (`pytest`,
+  `scipy`, `scikit-learn` were undeclared). Added `requirements-dev.txt`.
+
 ## 2.14
 
 ### Fixed

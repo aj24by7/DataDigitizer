@@ -55,7 +55,7 @@ def digitize_image(
     log_x: bool = False,
     log_y: bool = False,
     normalize_y: bool = False,
-    limit_to_calibration: bool = True,
+    limit_to_calibration: bool = False,
     verbose: int = 0,
 ) -> DigitizerOutputs:
     """Digitize a plot image using the existing GUI algorithms.

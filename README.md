@@ -289,9 +289,17 @@ Add any of these to the command for more control:
 | `--verbose N` *(`-v`)* | How much to print. `1` (or a bare `-v` / `--verbose`) shows the color, pixel coords, tick→OCR values, point count, and OCR confidence, and writes a `<image>_log.txt`. `0` prints only success + the output folder. | `0` (quiet) |
 | `--json` | Print the result details as JSON instead of plain text. | off |
 | `-h` / `--help` | Show the usage help and exit. | — |
+
+> **Why `--limit-to-calibration` is off by default.** The calibration box is built from the
+> tick positions OCR found. If it reads an outermost tick even slightly short, the box is
+> smaller than the real plot area, and limiting to it **silently clips real data off the ends
+> of your curve**. On `example_3_corundum_raman.png` that is not a subtle effect: limiting
+> keeps **81 of 930 points** — 91% of the spectrum discarded, with no error. Every entry
+> point (GUI, CLI, batch, and the `digitize_image()` API) now defaults to keeping everything.
+> Turn it on deliberately when you *want* to crop to the axes, not as a matter of course.
 | `--normalize-y` *(optional extra)* | Adds an extra `y_norm` column (Y rescaled to 0–1 over the axis range). Leave it off for normal use. | off |
-| `--limit-to-calibration` *(optional extra)* | Export only points inside the calibration box. **This is the CLI default.** | on |
-| `--no-limit-to-calibration` *(optional extra)* | Also export points that fall outside the calibration box (matches the GUI default). | not set |
+| `--limit-to-calibration` *(optional extra)* | Export **only** points inside the calibration box. Off unless you ask for it — see the warning below. | off |
+| `--no-limit-to-calibration` *(optional extra)* | Keep points outside the calibration box. **This is already the default**; the flag is kept so existing scripts keep working. | (default) |
 
 ### The "fill-in-the-blank" template and function-call style
 
@@ -314,7 +322,7 @@ py digitizer.py 'digitizer_cli(pic_dir="graph.png")'
 **Full example** — the `color`, `axis_values`, and `tick_setting` values below are **placeholders you must edit to match your own chart.** A leftover `color=(255,0,0)` (red) on a non-red curve finds no points and exits with *"produced no points."* Either delete the options you don't need (so those values auto-detect) or replace them with your real values:
 
 ```powershell
-py digitizer.py 'digitizer_cli(pic_dir="graph.png", color=(255,0,0), axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), log_x=False, log_y=False, output_dir="C:/Users/You/Downloads/out", verbose=1, json=False, normalize_y=False, limit_to_calibration=True)'
+py digitizer.py 'digitizer_cli(pic_dir="graph.png", color=(255,0,0), axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), log_x=False, log_y=False, output_dir="C:/Users/You/Downloads/out", verbose=1, json=False, normalize_y=False, limit_to_calibration=False)'
 ```
 
 The values you can put inside `digitizer_cli(...)`:
@@ -331,7 +339,7 @@ The values you can put inside `digitizer_cli(...)`:
 | `verbose` *(`v`)* | `1` prints full detail and writes a `<image>_log.txt`; `0` stays quiet. | `0` |
 | `json` *(`as_json`, `print_json`)* | `True` prints full details as JSON. **Only accepted in this function-call form** (the flag version is `--json`). | False |
 | `normalize_y` *(`normalize`)* — *optional extra* | `True` adds the `y_norm` (0–1) column. Leave off for normal use. | False |
-| `limit_to_calibration` *(`limit`)* — *optional extra* | `True` keeps only points inside the calibration window. | True |
+| `limit_to_calibration` *(`limit`)* — *optional extra* | `True` keeps **only** points inside the calibration window. | False |
 
 Arguments can be **positional** in the order `pic_dir, color, tick_setting, axis_values, output_dir`, or by **name** using any alias above. Empty positions are allowed and fall back to defaults, and the words `none` / `null` / blank are treated as "auto".
 

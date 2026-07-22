@@ -330,12 +330,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--normalize-y", action="store_true", help="(Optional) Add a y_norm column to each CSV.")
     parser.add_argument(
-        "--limit-to-calibration", dest="limit_to_calibration", action="store_true", default=True,
-        help="(Optional) Only export points inside the calibration window. This is the default.",
+        "--limit-to-calibration", dest="limit_to_calibration", action="store_true", default=False,
+        help="(Optional) Only export points INSIDE the calibration window. Off by default: a tick "
+             "misread slightly short would otherwise clip real data off the ends of the curve.",
     )
     parser.add_argument(
         "--no-limit-to-calibration", dest="limit_to_calibration", action="store_false",
-        help="(Optional) Also export points outside the calibration window.",
+        help="(Optional) Keep points outside the calibration window. This is already the default; "
+             "the flag is kept so existing scripts keep working.",
     )
     return parser
 

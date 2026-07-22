@@ -25,7 +25,7 @@ def digitizer_cli(
     log_x: object = False,
     log_y: object = False,
     normalize_y: bool = False,
-    limit_to_calibration: bool = True,
+    limit_to_calibration: bool = False,
     verbose: object = 0,
 ) -> DigitizerOutputs:
     """Function-style wrapper for one-line CLI/API use."""
@@ -214,14 +214,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--limit-to-calibration",
         dest="limit_to_calibration",
         action="store_true",
-        default=True,
-        help="(Optional) Only export points inside the calibration window. This is the CLI default.",
+        default=False,
+        help="(Optional) Only export points INSIDE the calibration window. Off by default: a tick "
+             "misread slightly short would otherwise clip real data off the ends of the curve.",
     )
     parser.add_argument(
         "--no-limit-to-calibration",
         dest="limit_to_calibration",
         action="store_false",
-        help="(Optional) Match the GUI default and export points outside the calibration window too.",
+        help="(Optional) Keep points outside the calibration window. This is already the default; "
+             "the flag is kept so existing scripts keep working.",
     )
     return parser
 
@@ -303,7 +305,7 @@ def print_template() -> None:
                 "  py digitizer.py 'digitizer_cli(pic_dir=\"plot2.png\", color=(255,0,0), "
                 "axis_values=(0,10,0,100), tick_setting=([10,200],[500,200],[10,200],[10,20]), "
                 "log_x=False, log_y=False, output_dir=\"C:/Users/User/Downloads/out\", "
-                "verbose=1, json=False, normalize_y=False, limit_to_calibration=True)'",
+                "verbose=1, json=False, normalize_y=False, limit_to_calibration=False)'",
                 "",
                 "What each value means:",
                 "  pic_dir=\"...\"               required - image file (a bare name is looked up in Downloads)",
@@ -317,7 +319,7 @@ def print_template() -> None:
                 "  json=True                   print the full result details as JSON",
                 "  -- the two below are optional extras; leave them off for normal use --",
                 "  normalize_y=True            (optional) add a 0-1 normalized Y column to the CSV",
-                "  limit_to_calibration=False  (optional) also keep points outside the calibration box",
+                "  limit_to_calibration=True   (optional) drop points outside the calibration box (off by default)",
             ]
         )
     )
@@ -391,7 +393,7 @@ def parse_function_call(call_text: str) -> dict[str, Any]:
         "log_x": _coerce_bool(values.get("log_x"), default=False),
         "log_y": _coerce_bool(values.get("log_y"), default=False),
         "normalize_y": _coerce_bool(values.get("normalize_y"), default=False),
-        "limit_to_calibration": _coerce_bool(values.get("limit_to_calibration"), default=True),
+        "limit_to_calibration": _coerce_bool(values.get("limit_to_calibration"), default=False),
         "verbose": _coerce_verbose(values.get("verbose")),
         # Not a digitizer_cli argument; _run_function_call pops it to pick the output style.
         "_json": _coerce_bool(values.get("json"), default=False),
@@ -757,7 +759,7 @@ def _prompt_values() -> Optional[dict[str, object]]:
     log_y = _prompt_yes_no("Log scale on the Y axis? [y/N]: ", default=False)
     output_dir = _clean_input(input("Output directory [blank = image folder]: "))
     normalize_y = _prompt_yes_no("Add normalized Y column? (optional) [y/N]: ", default=False)
-    limit_to_calibration = _prompt_yes_no("Limit points to calibration window? (optional) [Y/n]: ", default=True)
+    limit_to_calibration = _prompt_yes_no("Limit points to calibration window? (optional) [y/N]: ", default=False)
 
     print()
     print("Summary")

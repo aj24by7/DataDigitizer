@@ -22,6 +22,16 @@ on GitHub; download the apps from the [Releases page](https://github.com/aj24by7
 
 ### Fixed
 
+- **The documented remedy for a misread axis could silently corrupt the data.** The four
+  Min-Max Coordinate boxes (and `--axis`) are not the corners of the plot -- they are the
+  values of the four tick positions the detector anchored on, which are not always the
+  outermost ticks. The guide told users to "type the correct number" / "give the real axis
+  min/max", so anyone whose detection anchored on an inner gridline replaced a correct value
+  with the axis end, rescaling every exported number. Measured on a real spectrum whose Y
+  anchored on the `0.2` gridline: entering `0.2` gives RMSE 0.026 / R2 0.950, entering `0`
+  gives RMSE 0.225 / R2 -2.71 -- and correlation is identical (0.975) either way, so the
+  curve still looks right. Both report success. The docs now explain what the values mean and
+  the CLI prints a warning when the supplied values disagree with the detected ticks.
 - **Ordinary charts could fail to digitize at all.** Snapping a tick label to its axis line
   probed exactly one pixel column. An outermost label is centred on its tick at the very end
   of the spine, and the OCR bounding-box centre can land a few pixels past it -- measured 9px

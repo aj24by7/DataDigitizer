@@ -103,6 +103,25 @@ def digitize_image(
 
     if provided_axis is None:
         provided_axis = _axis_values_from_detection(window)
+    elif provided_ticks is None:
+        # The supplied values are attached to the tick PIXELS that OCR picked, which are not
+        # necessarily the outermost ticks. Someone who passes the plot's true axis range while
+        # detection anchored on an inner gridline silently rescales every exported number --
+        # measured at R2 0.950 -> -2.71 on a real spectrum, with correlation unchanged at 0.975
+        # so the curve still looks right. Say so; the run is still allowed to proceed.
+        detected = _detected_tick_values(window)
+        if detected is not None and any(
+            d is not None and abs(float(d) - float(v)) > 1e-9 for d, v in zip(detected, provided_axis)
+        ):
+            print(
+                "WARNING: --axis values are applied to the tick positions the detector found, "
+                f"not to the corners of the plot. It anchored on ticks it read as "
+                f"x:{detected[0]}..{detected[1]}, y:{detected[2]}..{detected[3]}, and you supplied "
+                f"x:{provided_axis[0]}..{provided_axis[1]}, y:{provided_axis[2]}..{provided_axis[3]}. "
+                "If those ticks are NOT the ends of your axes, every exported value will be "
+                "rescaled. Pass --ticks as well to pin the pixel positions too.",
+                file=sys.stderr,
+            )
 
     _apply_axis_values(window, provided_axis)
 
@@ -278,6 +297,16 @@ def _run_axis_detection(window: DigitizerWindow) -> None:
     if window._axis_result is None:
         raise DigitizerCliError(window.status_label.text() or "Axis OCR detection failed.")
 
+
+def _detected_tick_values(window: DigitizerWindow) -> Optional[AxisValues]:
+    """The four tick values OCR read, or None if detection did not run/complete."""
+    result = getattr(window, "_axis_result", None)
+    if result is None:
+        return None
+    values = (result.x_min, result.x_max, result.y_min, result.y_max)
+    if any(v is None for v in values):
+        return None
+    return values  # type: ignore[return-value]
 
 def _axis_values_from_detection(window: DigitizerWindow) -> AxisValues:
     result = window._axis_result

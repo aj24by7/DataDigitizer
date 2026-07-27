@@ -149,7 +149,35 @@ The app uses OCR (text recognition) to read the numbers printed along your axes 
 
 ### 4. Check and fix the axis numbers
 
-Look at the four **Min-Max Coordinates** boxes. OCR is good but not perfect, so **always sanity-check them.** If any value is missing or misread, just **type the correct number into the box** yourself.
+Look at the four **Min-Max Coordinates** boxes. OCR is good but not perfect, so **always sanity-check them.** If any value is missing or misread, type the correct number into the box yourself.
+
+> ### Read this before you change a number
+>
+> **These four boxes are not "the range of your graph". They are the values of the four
+> specific tick marks the detector locked onto** — and it does not always lock onto the
+> outermost ones.
+>
+> If it anchored on an inner gridline, the box will show *that gridline's* value, and that
+> is correct. Replacing it with your axis's true end value tells the tool "this pixel row
+> means 0" about a row that actually means something else, and **every exported number is
+> then rescaled and wrong** — silently, with a perfect-looking overlay.
+>
+> Measured on a real spectrum whose Y detection anchored on the `0.2` gridline:
+>
+> | What you type for Y-min | RMSE | R² |
+> | --- | --- | --- |
+> | `0.2` — the value of the tick it anchored on | 0.026 | **0.950** |
+> | `0` — the true bottom of the axis | 0.225 | **−2.71** |
+>
+> Both runs report success. Correlation is **identical (0.975)** either way, so eyeballing
+> the curve shape will not catch it.
+>
+> **So:** only change a box when the tool misread *that tick's own printed label* (it shows
+> `8` where the tick is clearly labelled `800`). Check which ticks it used first — in the app
+> the detected values are shown in the Axis Scale Detection submenu; on the command line run
+> with `--verbose 1` and read the `tick -> values` line. If you want to force the axis
+> endpoints specifically, supply the tick pixel positions too (`--ticks`), which pins both
+> halves of the mapping.
 
 > These four values are required. Export will not run until all four boxes contain valid numbers.
 
@@ -281,7 +309,7 @@ Add any of these to the command for more control:
 | `pic_path` *(positional)* | Path to the image. A bare filename is searched in the current folder, then Downloads. Either this **or** `--pic-dir` is required. | none (required) |
 | `--pic-dir` | Another way to give the image path. If both are given, `--pic-dir` wins. | none |
 | `--color R,G,B` | Curve color, e.g. `255,0,0` (each part 0–255). Also accepts `[r,g,b]`. **Must match your curve's actual color**, or the run finds no points. | auto-detected |
-| `--axis-values` *(`--axis`)* | Axis numbers as `xmin,xmax,ymin,ymax`. X min must differ from X max, and Y min from Y max. | read by OCR |
+| `--axis-values` *(`--axis`)* | Values of the four **detected tick positions**, as `xmin,xmax,ymin,ymax` — *not* the plot corners unless the detector anchored on them. See the warning in [step 4](#4-check-and-fix-the-axis-numbers); pair with `--ticks` to pin the pixels too. X min must differ from X max, and Y min from Y max. | read by OCR |
 | `--ticks` *(`--tick-setting`, `--tick-coordinates`)* | Four tick pixel points in `x_min,x_max,y_min,y_max` order, e.g. `[10,200],[500,200],[10,200],[10,20]`. | found by OCR |
 | `--log-x` | Read the X axis in base-10 **log** space (X min/max must be positive). Mirrors the GUI's **log** toggle. | off (linear) |
 | `--log-y` | Read the Y axis in base-10 **log** space (Y min/max must be positive). Mirrors the GUI's **log** toggle. | off (linear) |
@@ -613,9 +641,19 @@ Python isn't installed (or wasn't added to your PATH). Install it from <https://
 The color it's matching doesn't match your curve. If you passed `--color` (or `color=`), the values are wrong — fix them, or drop the option entirely to let it auto-detect. The placeholder `255,0,0` (red) in the template will fail on any non-red plot.
 
 **The axis numbers came out wrong.**
-OCR can misread numbers. Always check them.
-- *In the app:* type the correct value into the **Min-Max Coordinates** box.
-- *On the command line:* give them with `--axis xmin,xmax,ymin,ymax` (flags) or `axis_values=(xmin,xmax,ymin,ymax)` (function-call form). Run with `--verbose 1` to see the **OCR confidence score** — a low number is a strong hint that you should type the axis values in yourself with `--axis`.
+OCR can misread numbers. Always check them — but **check *which ticks* it used before you
+override anything** (see [the warning in step 4](#4-check-and-fix-the-axis-numbers)).
+- *First:* run with `--verbose 1` and read the `tick -> values` line. That tells you which
+  four ticks the tool anchored on and what it thinks each one is worth.
+- *Then, in the app:* type the correct value for **that tick** into the **Min-Max
+  Coordinates** box — not your axis's end value, unless the tick it anchored on really is
+  the end of the axis.
+- *On the command line:* `--axis xmin,xmax,ymin,ymax` (or `axis_values=(...)` in the
+  function-call form) sets the values of the **detected tick positions**, not the plot
+  corners. Supplying your true axis range when the tool anchored on an inner tick rescales
+  every exported number and reports success anyway.
+- *To pin both halves yourself:* pass `--ticks` alongside `--axis` so the pixel positions and
+  the values are both yours. This is the only fully unambiguous way to override the mapping.
 
 **"Image file not found" on the command line.**
 Put the image in your **Downloads** folder or in the folder the terminal is pointed at (a bare filename is searched in both), or pass the **full path in quotes**, e.g. `py digitizer.py "C:\Users\You\Pictures\graph.png"`.

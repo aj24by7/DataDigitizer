@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Versions follow the release tags
 on GitHub; download the apps from the [Releases page](https://github.com/aj24by7/DataDigitizer/releases/latest).
 
-## Unreleased
+## 2.14.1 (in v2.14 release assets)
 
 ### Changed
 
@@ -19,6 +19,16 @@ on GitHub; download the apps from the [Releases page](https://github.com/aj24by7
   and `--no-limit-to-calibration` is kept as an explicit no-op so existing scripts and
   documented commands keep working unchanged. `test_defaults.py` locks all four entry
   points together.
+
+### Added
+
+- **A warning when the image is too small for reliable OCR.** Resolution is the strongest
+  predictor of a silently wrong result: the axis labels have to be legible, and on a small
+  figure they are only a few pixels tall. Measured on plain matplotlib charts at the default
+  figure size vs the same charts at `dpi=200`: 55.5% -> 1.14%, 93.3% -> 1.00%, 278.9% ->
+  0.76% error. All the bad runs reported success at 95% OCR confidence, so confidence does
+  not catch this. Images under 700px on the short side now warn. Documented with the measured
+  numbers under "Resolution matters more than anything else".
 
 ### Fixed
 
@@ -61,6 +71,8 @@ on GitHub; download the apps from the [Releases page](https://github.com/aj24by7
   documents. `version.json` is now read at runtime and is the single source of truth.
 - The documented test command could not run from the declared dependencies (`pytest`,
   `scipy`, `scikit-learn` were undeclared). Added `requirements-dev.txt`.
+- The CLI options table was split in half by an inserted note, so three documented flags
+  rendered as raw text on GitHub. Repaired.
 
 ## 2.14
 

@@ -23,6 +23,11 @@ ColorRgb = Tuple[int, int, int]
 # (but never blocked -- see the C1 warning in digitize_image).
 _LOW_AXIS_CONFIDENCE = 55.0
 
+# Below this smaller-dimension pixel count, tick labels are usually too small for reliable
+# OCR. Chosen from measurement: charts under ~700px misread often; the Pilot benchmark
+# (1800px) and the real spectra (~1100px) read correctly.
+_MIN_COMFORTABLE_PIXELS = 700
+
 
 class DigitizerCliError(RuntimeError):
     """Raised when the CLI wrapper cannot complete a digitization run."""
@@ -79,6 +84,23 @@ def digitize_image(
     image = QtGui.QImage(str(image_path))
     if image.isNull():
         raise DigitizerCliError(f"Failed to load image: {image_path}")
+
+    # Resolution is the single strongest predictor of a silently wrong result. OCR has to read
+    # the printed tick labels, and on a small figure they are only a few pixels tall, so it
+    # misreads them -- then every exported number is rescaled and the run still reports
+    # success. Measured on plain matplotlib charts saved at the default size: 55%, 93% and 279%
+    # error, all reported "Success" with an OCR confidence of 95%. The same charts re-saved at
+    # dpi=200 came out at 1.14%, 1.00% and 0.76%. Confidence does not catch this, so warn on
+    # the input itself.
+    if not image.isNull() and min(image.width(), image.height()) < _MIN_COMFORTABLE_PIXELS:
+        print(
+            f"WARNING: this image is small ({image.width()}x{image.height()}). The axis numbers "
+            "may be too few pixels tall for OCR to read reliably, and a misread tick silently "
+            "rescales every exported value. If the numbers look wrong, re-save the figure at a "
+            "higher resolution (in matplotlib: dpi=200 or more), or pass the axis values "
+            "yourself with --axis (and --ticks to pin the pixel positions).",
+            file=sys.stderr,
+        )
 
     window = DigitizerWindow()
     window.set_image(image)

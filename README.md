@@ -255,6 +255,30 @@ Most plots are linear, so leave this alone for a normal graph — but if your gr
 
 > A log axis needs **positive** min/max values (you can't take the log of zero or a negative number). If a value is zero or negative, export will tell you instead of producing wrong numbers.
 
+### Resolution matters more than anything else
+
+**The single biggest cause of wrong numbers is an image whose axis labels are too small to
+read.** Everything downstream depends on OCR getting the printed tick numbers right; when it
+misreads one, every exported value is rescaled — and the run still reports success, with a
+high confidence score and an overlay that sits perfectly on the curve.
+
+Measured on plain matplotlib charts saved at the default figure size, then re-saved at
+`dpi=200` with nothing else changed:
+
+| chart | saved small | saved at dpi=200 |
+| --- | --- | --- |
+| exponential decay | **55.5%** error | **1.14%** |
+| decimal ticks (`2.5`) | **93.3%** error | **1.00%** |
+| offset axes (100–200) | **278.9%** error | **0.76%** |
+
+Same tool, same charts. Only the pixel size of the tick labels changed.
+
+**So:** feed it the largest version of the figure you have. Roughly 1000 px on the short side
+is comfortable; below ~700 px the app now prints a warning. If you only have a small image,
+check the numbers it read (`--verbose 1`, or the Axis Scale Detection panel in the app) and
+supply them yourself if they are wrong — see the warning in
+[step 4](#4-check-and-fix-the-axis-numbers) about what those values actually mean.
+
 ### Tips for the best results
 
 - A **clean, distinctly-colored curve** works best. Point extraction matches your selected color within a tolerance and takes the vertical midpoint of matching pixels in each column.
@@ -317,6 +341,9 @@ Add any of these to the command for more control:
 | `--verbose N` *(`-v`)* | How much to print. `1` (or a bare `-v` / `--verbose`) shows the color, pixel coords, tick→OCR values, point count, and OCR confidence, and writes a `<image>_log.txt`. `0` prints only success + the output folder. | `0` (quiet) |
 | `--json` | Print the result details as JSON instead of plain text. | off |
 | `-h` / `--help` | Show the usage help and exit. | — |
+| `--normalize-y` *(optional extra)* | Adds an extra `y_norm` column (Y rescaled to 0–1 over the axis range). Leave it off for normal use. | off |
+| `--limit-to-calibration` *(optional extra)* | Export **only** points inside the calibration box. Off unless you ask for it — see the warning below. | off |
+| `--no-limit-to-calibration` *(optional extra)* | Keep points outside the calibration box. **This is already the default**; the flag is kept so existing scripts keep working. | (default) |
 
 > **Why `--limit-to-calibration` is off by default.** The calibration box is built from the
 > tick positions OCR found. If it reads an outermost tick even slightly short, the box is
@@ -325,9 +352,6 @@ Add any of these to the command for more control:
 > keeps **81 of 930 points** — 91% of the spectrum discarded, with no error. Every entry
 > point (GUI, CLI, batch, and the `digitize_image()` API) now defaults to keeping everything.
 > Turn it on deliberately when you *want* to crop to the axes, not as a matter of course.
-| `--normalize-y` *(optional extra)* | Adds an extra `y_norm` column (Y rescaled to 0–1 over the axis range). Leave it off for normal use. | off |
-| `--limit-to-calibration` *(optional extra)* | Export **only** points inside the calibration box. Off unless you ask for it — see the warning below. | off |
-| `--no-limit-to-calibration` *(optional extra)* | Keep points outside the calibration box. **This is already the default**; the flag is kept so existing scripts keep working. | (default) |
 
 ### The "fill-in-the-blank" template and function-call style
 

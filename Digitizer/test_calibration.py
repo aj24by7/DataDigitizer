@@ -114,3 +114,27 @@ def test_blank_image_finds_nothing(app):
     result = _calibrate(_canvas(), (200, 570), (700, 570))
     assert result.x_min_point is None
     assert result.x_max_point is None
+
+
+def test_label_just_past_the_axis_end_still_snaps(app):
+    """A tick label centred a few px beyond the end of the axis line must not kill the run.
+
+    Real matplotlib charts hit this: the outermost label is centred on its tick at the very
+    end of the spine, and the OCR bounding-box centre can land a few pixels past it. Probing
+    that single column found no axis and returned None, which failed the whole digitization
+    of an otherwise ordinary chart.
+    """
+    image = _draw(_canvas(), [(50, BOTTOM_SPINE, 700, BOTTOM_SPINE), (50, 20, 50, BOTTOM_SPINE)])
+    # x=709 is 9px past the spine's right end (700) -- the exact geometry measured on a real chart.
+    result = _calibrate(image, (200, 570), (709, 570))
+    assert result.x_max_point is not None, "snap gave up on a label just past the axis end"
+    # The along-axis coordinate must be preserved exactly; only the row comes from the neighbour.
+    assert result.x_max_point[0] == 709
+    assert abs(result.x_max_point[1] - BOTTOM_SPINE) <= 2
+
+
+def test_widening_does_not_invent_an_axis_on_a_blank_image(app):
+    """The widened search must still give up when there is genuinely nothing to find."""
+    result = _calibrate(_canvas(), (200, 570), (700, 570))
+    assert result.x_min_point is None
+    assert result.x_max_point is None

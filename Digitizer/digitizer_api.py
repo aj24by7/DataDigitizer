@@ -286,6 +286,26 @@ def _axis_values_from_detection(window: DigitizerWindow) -> AxisValues:
     values = (result.x_min, result.x_max, result.y_min, result.y_max)
     if any(value is None for value in values):
         raise DigitizerCliError("Axis OCR did not find all x/y min/max values.")
+    # Values supplied by hand go through _normalize_axis_values, which rejects a degenerate
+    # axis. OCR-derived values used to skip that check -- and when OCR misreads BOTH ticks on
+    # an axis as the same number, the scale collapses to zero and every point maps to that one
+    # value. The run still reported success: a CSV where every x is "8", exit code 0, no
+    # warning. Silently wrong numbers are the worst failure mode for this tool, so fail here.
+    x_min, x_max, y_min, y_max = values
+    if x_min == x_max:
+        raise DigitizerCliError(
+            f"Axis OCR read the same X value ({x_min}) for both the X-min and X-max ticks, so "
+            "the X scale would be degenerate and every exported x would be identical. "
+            "Pass the real axis range with --axis xmin,xmax,ymin,ymax "
+            "(run with --verbose 1 to see which ticks were detected)."
+        )
+    if y_min == y_max:
+        raise DigitizerCliError(
+            f"Axis OCR read the same Y value ({y_min}) for both the Y-min and Y-max ticks, so "
+            "the Y scale would be degenerate and every exported y would be identical. "
+            "Pass the real axis range with --axis xmin,xmax,ymin,ymax "
+            "(run with --verbose 1 to see which ticks were detected)."
+        )
     return values  # type: ignore[return-value]
 
 

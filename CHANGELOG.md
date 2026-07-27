@@ -22,6 +22,20 @@ on GitHub; download the apps from the [Releases page](https://github.com/aj24by7
 
 ### Fixed
 
+- **Ordinary charts could fail to digitize at all.** Snapping a tick label to its axis line
+  probed exactly one pixel column. An outermost label is centred on its tick at the very end
+  of the spine, and the OCR bounding-box centre can land a few pixels past it -- measured 9px
+  past on a stock matplotlib chart -- so that column contained no axis, the snap returned
+  nothing, and the whole run failed with "could not locate all four axis tick points". The
+  snap now widens to neighbouring columns (nearest first) when the exact one comes up empty,
+  taking only the perpendicular coordinate from the neighbour so the scale is unchanged.
+  Inputs that already snapped are unaffected: the exact column is always tried first.
+- **A misread axis could produce silently wrong data.** Axis values supplied by hand were
+  checked for a degenerate range (x_min == x_max); values read by OCR were not. When OCR
+  misread both ticks on an axis as the same number the scale collapsed to zero, every
+  exported value on that axis became identical, and the run still reported success -- a CSV
+  where every x was "8", 766 points, exit code 0, no warning. This is now a loud error naming
+  the misread value and telling you to pass `--axis`.
 - The exe is blocked silently by **Smart App Control** on Windows 11 (on by default for new
   installs) because it is unsigned -- double-clicking does nothing at all, with no dialog.
   The docs previously described only the SmartScreen *"Run anyway"* flow, which never

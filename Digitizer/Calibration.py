@@ -192,18 +192,53 @@ def _snap_to_black(
 ) -> Optional[Tuple[int, int]]:
     start_x = max(0, min(start_x, width - 1))
     start_y = max(0, min(start_y, height - 1))
-    if direction == "right":
-        for x in range(start_x, width):
-            if _is_excluded(x, start_y, exclude_rects):
-                continue
-            if _is_black(data, bytes_per_line, x, start_y, threshold):
-                return (x, start_y)
-    elif direction == "up":
-        for y in range(start_y, -1, -1):
-            if _is_excluded(start_x, y, exclude_rects):
-                continue
-            if _is_black(data, bytes_per_line, start_x, y, threshold):
-                return (start_x, y)
+
+    def scan(x: int, y: int) -> Optional[Tuple[int, int]]:
+        if direction == "right":
+            for probe in range(x, width):
+                if _is_excluded(probe, y, exclude_rects):
+                    continue
+                if _is_black(data, bytes_per_line, probe, y, threshold):
+                    return (probe, y)
+        elif direction == "up":
+            for probe in range(y, -1, -1):
+                if _is_excluded(x, probe, exclude_rects):
+                    continue
+                if _is_black(data, bytes_per_line, x, probe, threshold):
+                    return (x, probe)
+        return None
+
+    hit = scan(start_x, start_y)
+    if hit is not None:
+        return hit
+
+    # The exact lane found nothing. That usually means the tick label's centre sits just
+    # past the end of the axis line -- an outermost label is centred on its tick, but the
+    # OCR bounding box can be a few pixels off, and on a chart whose extreme tick sits flush
+    # at the axis end those few pixels land beyond the spine. Probing one lane then reports
+    # total failure on a perfectly ordinary chart (matplotlib with set_xlim matching the tick
+    # extremes is enough to trigger it).
+    #
+    # Widen to the neighbouring lanes, nearest first, and keep the FIRST hit. Only the
+    # perpendicular coordinate is taken from the neighbour: the along-axis coordinate stays
+    # exactly where OCR put the tick, so the scale is unchanged. Every input that already
+    # snapped is unaffected -- the exact lane is always tried first, above.
+    span = width if direction == "up" else height
+    window = max(6, min(24, int(round(0.015 * span))))
+    for offset in range(1, window + 1):
+        for lane in (start_x - offset, start_x + offset) if direction == "up" else (start_y - offset, start_y + offset):
+            if direction == "up":
+                if not 0 <= lane < width:
+                    continue
+                found = scan(lane, start_y)
+                if found is not None:
+                    return (start_x, found[1])
+            else:
+                if not 0 <= lane < height:
+                    continue
+                found = scan(start_x, lane)
+                if found is not None:
+                    return (found[0], start_y)
     return None
 
 

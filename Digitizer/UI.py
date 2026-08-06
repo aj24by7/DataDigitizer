@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from AxisReader import AxisDetectionError, AxisScaleResult, detect_axis_scale
+import EnhancedClick
 from Calibration import CalibrationResult, coordinate_mediated_calibration, line_mediated_calibration
 from ErrorLogger import get_csv_path, log_exception, read_recent_entries
 from Masking import detect_legend_mask, detect_number_masks, detect_word_masks
@@ -207,12 +208,23 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             "manual": [],
         }
         self._mask_mode = False
-        self._manual_points: dict[str, Optional[Tuple[int, int]]] = {
+        # Floats, not ints: with Enhanced Click on, these carry the sub-pixel centre of the
+        # tick feature. _get_axis_points and set_calibration_overlays both already accept
+        # floats, so the extra precision survives all the way into the affine mapper.
+        self._manual_points: dict[str, Optional[Tuple[float, float]]] = {
             "x_min": None,
             "x_max": None,
             "y_min": None,
             "y_max": None,
         }
+        # Enhanced Click: snap a manual calibration click onto the tick it meant.
+        self._enhanced_click = False                       # opt-in, off by default
+        # Slider value = the MAXIMUM DISTANCE the point may be moved. The search window is
+        # derived (max_move + 2 px) so a feature is always found slightly beyond the limit
+        # and can then be accepted or rejected on distance, rather than never being seen.
+        self._enhanced_max_move = EnhancedClick.DEFAULT_MAX_MOVE
+        # Undo stack of (stage, points snapshot) captured before each manual click.
+        self._manual_undo: list[Tuple[int, dict]] = []
         self._color_states: list[ColorExtractionState] = [ColorExtractionState()]
         self._active_color_index = 0
         self._export_selected_color_indices: set[int] = set()
@@ -260,6 +272,14 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_calib_manual = self.calibration_menu.addAction("Manual Calibration")
         self.act_calib_coord = self.calibration_menu.addAction("Coordinate-Mediated Calibration")
         self.act_calib_line = self.calibration_menu.addAction("Line-Mediated Calibration")
+        self.calibration_menu.addSeparator()
+        self.act_enhanced_click = self.calibration_menu.addAction("Enhanced Human Click")
+        self.act_enhanced_click.setCheckable(True)
+        self.act_enhanced_click.setChecked(False)
+        self.act_enhanced_click.setToolTip(
+            "During manual calibration, snap each click onto the crosshair, corner or axis "
+            "line nearest it. Corrects the ~0.9 px error of a human click. Ctrl+Z undoes a click.")
+        self.act_enhanced_settings = self.calibration_menu.addAction("Enhanced Click Settings...")
         self.act_calib_line.setVisible(False)  # hidden in 2.12
         self.tools_menu.addMenu(self.calibration_menu)
         self.act_interpolate = self.tools_menu.addAction("Interpolation")
@@ -441,6 +461,8 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.act_calib_manual.triggered.connect(self.start_manual_calibration)
         self.act_calib_coord.triggered.connect(self.run_coordinate_calibration)
         self.act_calib_line.triggered.connect(self.run_line_calibration)
+        self.act_enhanced_click.toggled.connect(self.toggle_enhanced_click)
+        self.act_enhanced_settings.triggered.connect(self.open_enhanced_click_settings)
         self.act_mask_words.triggered.connect(self.run_mask_words)
         self.act_mask_numbers.triggered.connect(self.run_mask_numbers)
         self.act_mask_legend.triggered.connect(self.run_mask_legend)
@@ -804,6 +826,11 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             self.status_label.setText(f"Assigned {self._selected_color} to {self._color_slot_label(self._active_color_index)}.")
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        if (event.key() == QtCore.Qt.Key.Key_Z
+                and event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
+            self.undo_manual_click()
+            event.accept()
+            return
         if event.key() == QtCore.Qt.Key.Key_Escape and self._mask_mode:
             self.act_mask_manual.setChecked(False)
             event.accept()
@@ -1470,6 +1497,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._calibration_result = None
         self._calibration_mode = None
         self._manual_stage = 0
+        self._manual_undo.clear()
         for key in self._manual_points:
             self._manual_points[key] = None
         self._hide_calib_guide()
@@ -1524,24 +1552,117 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         )
         self._show_calib_guide(0)
 
+    # ----- Enhanced Human Click -----
+    def toggle_enhanced_click(self, checked: bool) -> None:
+        self._enhanced_click = bool(checked)
+        self.status_label.setText(
+            f"Enhanced Human Click ON — will move a click up to "
+            f"{self._enhanced_max_move:.1f} px onto a tick feature."
+            if checked else "Enhanced Human Click OFF — clicks are used exactly as placed.")
+
+    def open_enhanced_click_settings(self) -> None:
+        """Slider for the search radius, with the statistics that motivate the default."""
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Enhanced Click Settings")
+        lay = QtWidgets.QVBoxLayout(dlg)
+
+        blurb = QtWidgets.QLabel(
+            "A human click lands about <b>0.9 px</b> from its target. Enhanced Click looks "
+            "for a crosshair, corner or axis line near the click and moves the point onto "
+            "its exact centre.<br><br>"
+            "The slider sets how far a click may be moved. If the status bar says a feature "
+            "was <i>N px away (limit ...)</i>, raise this above N, press <b>Ctrl+Z</b>, and "
+            "click again — the new limit applies immediately.<br><br>"
+            "Radial miss distance is Rayleigh-distributed, so the share of clicks landing "
+            "further than R from the target is exp(-R&sup2;/2&sigma;&sup2;):<br>"
+            "&nbsp;&nbsp;<b>1.8 px</b> misses 13.5% &nbsp;·&nbsp; <b>2.7 px</b> misses 1.1% "
+            "&nbsp;·&nbsp; <b>3.6 px</b> misses 0.03%<br><br>"
+            "Keep it as small as still locks on: a large limit can reach a neighbouring "
+            "gridline or a minor tick instead of the one you meant.")
+        blurb.setWordWrap(True)
+        blurb.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        lay.addWidget(blurb)
+
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(QtWidgets.QLabel("Max snap distance"))
+        slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        slider.setMinimum(10)          # tenths of a pixel: 1.0 .. 10.0 px
+        slider.setMaximum(100)
+        slider.setValue(int(round(self._enhanced_max_move * 10)))
+        readout = QtWidgets.QLabel(f"{self._enhanced_max_move:.1f} px")
+        readout.setMinimumWidth(52)
+        slider.valueChanged.connect(lambda v: readout.setText(f"{v / 10:.1f} px"))
+        row.addWidget(slider, 1)
+        row.addWidget(readout)
+        lay.addLayout(row)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            | QtWidgets.QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        lay.addWidget(buttons)
+
+        if dlg.exec():
+            self._enhanced_max_move = slider.value() / 10.0
+            self.status_label.setText(
+                f"Enhanced Click: will now move a click up to "
+                f"{self._enhanced_max_move:.1f} px. Takes effect on the next click.")
+
+    def undo_manual_click(self) -> None:
+        """Ctrl+Z: undo the last manual calibration click, snapped or not."""
+        if not self._manual_undo:
+            self.status_label.setText("Nothing to undo.")
+            return
+        stage, snapshot = self._manual_undo.pop()
+        self._manual_stage = stage
+        self._manual_points = dict(snapshot)
+        self._calibration_mode = "manual"
+        points = [pt for pt in self._manual_points.values() if pt is not None]
+        self.image_tray.set_calibration_overlays(points, self._manual_box_corners())
+        if self._manual_stage <= 3:
+            self._show_calib_guide(self._manual_stage)
+        else:
+            self._show_calib_guide_complete()
+        self.status_label.setText(
+            f"Undone — click {self._MANUAL_GUIDE_STEPS[self._manual_stage][0]} again."
+            if self._manual_stage <= 3 else "Undone.")
+
     def _handle_manual_calibration_click(self, x: int, y: int) -> None:
+        # Snapshot BEFORE mutating, so Ctrl+Z restores both the points and the stage.
+        self._manual_undo.append((self._manual_stage, dict(self._manual_points)))
+
+        px, py = float(x), float(y)
+        snap_note = ""
+        if self._enhanced_click:
+            # Read live, so changing the slider and re-clicking (after Ctrl+Z) immediately
+            # uses the new limit -- no restart of manual calibration required.
+            result = EnhancedClick.snap(
+                self._image, px, py,
+                search_radius=self._enhanced_max_move + 2.0,
+                max_move=self._enhanced_max_move,
+            )
+            px, py = result.x, result.y
+            snap_note = "  " + result.message
+
+        x, y = px, py
         if self._manual_stage == 0:
             self._manual_points["x_min"] = (x, y)
             self._manual_stage = 1
-            self.status_label.setText("Manual calibration: click X max.")
+            self.status_label.setText("Manual calibration: click X max." + snap_note)
         elif self._manual_stage == 1:
             self._manual_points["x_max"] = (x, y)
             self._manual_stage = 2
-            self.status_label.setText("Manual calibration: click Y min.")
+            self.status_label.setText("Manual calibration: click Y min." + snap_note)
         elif self._manual_stage == 2:
             self._manual_points["y_min"] = (x, y)
             self._manual_stage = 3
-            self.status_label.setText("Manual calibration: click Y max.")
+            self.status_label.setText("Manual calibration: click Y max." + snap_note)
         elif self._manual_stage == 3:
             self._manual_points["y_max"] = (x, y)
             self._manual_stage = 4
             self._calibration_mode = None
-            self.status_label.setText("Manual calibration complete. Enter values in the Min-Max Coordinates boxes if needed.")
+            self.status_label.setText("Manual calibration complete. Enter values in the Min-Max Coordinates boxes if needed." + snap_note)
         points = [pt for pt in self._manual_points.values() if pt is not None]
         box = self._manual_box_corners()
         self.image_tray.set_calibration_overlays(points, box)
@@ -1580,7 +1701,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
     def _hide_calib_guide(self) -> None:
         self.calib_guide.setVisible(False)
 
-    def _manual_box_corners(self) -> Optional[list[Tuple[int, int]]]:
+    def _manual_box_corners(self) -> Optional[list[Tuple[float, float]]]:
         """Box (4 corner points) for manual calibration: the data-extent rectangle of
         the four clicked ticks. X-min/X-max set the left/right edges, Y-min/Y-max set
         the bottom/top, so it works for non-traditional tick placements. Returns None

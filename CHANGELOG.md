@@ -3,6 +3,45 @@
 All notable changes to this project are documented here. Versions follow the release tags
 on GitHub; download the apps from the [Releases page](https://github.com/aj24by7/DataDigitizer/releases/latest).
 
+## 2.15
+
+### Added
+
+- **Enhanced Human Click** — during *manual* calibration, each click is snapped onto the
+  nearest tick feature at sub-pixel precision. Off by default; enable under
+  **Calibration → Enhanced Human Click**, with a **Max snap distance** slider (1–10 px,
+  default 3) in **Enhanced Click Settings…**.
+
+  A human click lands about 0.9 px from its target (measured in-house). Because radial miss
+  distance is Rayleigh-distributed, the search window is derived as `slider + 2 px`, so a
+  feature is always found slightly beyond the limit and can then be accepted or rejected on
+  distance rather than never being seen. The slider is read live, so raising it and
+  re-clicking after Ctrl+Z takes effect immediately.
+
+  The snap is only ever as strong as the evidence: two crossing strokes correct both x and y;
+  a single stroke corrects only *across* the line and leaves the position *along* it exactly
+  as clicked; no stroke leaves the point untouched. Every outcome is announced in the status
+  bar — a point is never moved silently.
+
+  Measured against simulated click noise (`benchmark_enhanced_click.py`, 2000 trials per
+  feature): a clean crosshair goes from 1.26 px RMS to 0.21 px, a 6× improvement; with no
+  feature present the point is not moved at all.
+
+- **Ctrl+Z undoes a manual calibration click**, snapped or not, restoring both the point and
+  the step. A misclick no longer means restarting all four points.
+
+- Manual calibration points are now stored as floats, so the sub-pixel result survives into
+  the coordinate mapping rather than being rounded away.
+
+### Fixed
+
+- **The axis-line pedestal.** A tick sits on its axis, so the axis line crossing the search
+  window adds ink to every entry of the perpendicular profile. The half-height support test
+  then fell below that pedestal whenever the axis was as thick as the tick was long, the
+  support ran the full width of the window, and the centroid collapsed back onto the click —
+  an x-axis tick snapped 1.76 px off, barely moving. Profiles are now pedestal-subtracted
+  before the peak is measured. Verified at 0.00 px error across nine tick geometries.
+
 ## 2.14.1 (in v2.14 release assets)
 
 ### Changed

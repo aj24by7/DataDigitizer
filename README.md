@@ -1,4 +1,4 @@
-# Data Digitizer 2.14 — User Guide
+# Data Digitizer 2.15 — User Guide
 
 ## What is this?
 
@@ -25,7 +25,17 @@ That's the whole flow. **Don't worry if those words mean nothing yet** — each 
 
 ---
 
-## What is new in 2.14
+## What is new in 2.15
+
+- **Enhanced Human Click** (new, off by default). During *manual* calibration, each click is
+  snapped onto the crosshair, corner or axis line nearest it, to sub-pixel precision. A human
+  click lands about 0.9 px from its target; on a clean tick this recovers the true centre to
+  about 0.2 px. Turn it on under **Tools → Calibration → Enhanced Human Click**, adjust the
+  limit under **Enhanced Click Settings…**, and press **Ctrl+Z** to undo a click.
+- **Ctrl+Z now undoes a manual calibration click** whether or not snapping is on, so a
+  misclick no longer means restarting all four points.
+
+## What was new in 2.14
 
 - **A calibration bug that could silently skew your numbers is fixed.** In some figures the
   axis detection could lock onto the wrong axis line, which quietly distorted every exported
@@ -707,6 +717,7 @@ ImageTray.py        # Canvas rendering and interaction
 PointPlacer.py      # Color-based point extraction + interpolation
 AxisReader.py       # OCR axis detection
 Calibration.py      # Calibration strategies
+EnhancedClick.py    # Sub-pixel snap of a manual click onto the nearest tick feature
 Masking.py          # OCR / manual masking helpers
 ErrorLogger.py      # Error logging utilities
 digitizer.spec      # PyInstaller spec (Digitizer.exe)
@@ -717,6 +728,8 @@ requirements-dev.txt# Test-only deps (pytest)
 version.json        # App name + version (read at runtime by app_version.py)
 app_version.py      # Single source of truth for the version string
 test_calibration.py # Tests for the axis-pair repair in calibration
+test_enhanced_click.py # Tests for the click snapping
+benchmark_enhanced_click.py # Measures the snap against simulated human click noise
 assets/             # Application icon
 vendor/tesseract/   # Bundled Tesseract OCR runtime
 ```
@@ -740,4 +753,4 @@ py accuracytester_desktop.py
 
 ---
 
-*Runtime logs are written to `%LOCALAPPDATA%\DataDigitizer\2.14\logs` (you can also view them in-app via **Advanced → Error Log**).*
+*Runtime logs are written to `%LOCALAPPDATA%\DataDigitizer\2.15\logs` (you can also view them in-app via **Advanced → Error Log**).*

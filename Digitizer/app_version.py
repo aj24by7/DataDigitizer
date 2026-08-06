@@ -17,7 +17,7 @@ from typing import Optional, Tuple
 # Used only if version.json is unreadable (a corrupt or partial install). Kept in step with
 # version.json by test_app_version.py.
 _FALLBACK_NAME = "DataDigitizer"
-_FALLBACK_VERSION = "2.14"
+_FALLBACK_VERSION = "2.15"
 
 
 def _version_json_path() -> Optional[Path]:

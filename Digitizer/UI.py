@@ -225,6 +225,10 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._enhanced_max_move = EnhancedClick.DEFAULT_MAX_MOVE
         # Undo stack of (stage, points snapshot) captured before each manual click.
         self._manual_undo: list[Tuple[int, dict]] = []
+        # True only while the user is actively in (or just finished) manual
+        # calibration; Ctrl+Z is scoped to it so a habitual undo pressed later in
+        # the session cannot silently re-enter calibration and hijack the next click.
+        self._manual_calib_recent = False
         self._color_states: list[ColorExtractionState] = [ColorExtractionState()]
         self._active_color_index = 0
         self._export_selected_color_indices: set[int] = set()
@@ -759,6 +763,11 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._update_axis_menu(None)
         self._reset_calibration_state()
         self._update_coord_fields(None)
+        # Log-scale is a per-image property: a stale toggle from the previous chart
+        # would silently apply 10**y to this one's export. setChecked(False) routes
+        # through toggle_log_x/y, which also clear _x_log/_y_log.
+        self.log_x_toggle.setChecked(False)
+        self.log_y_toggle.setChecked(False)
         for key in self._mask_rects:
             self._mask_rects[key] = []
         self._mask_mode = False
@@ -811,6 +820,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             self._handle_manual_calibration_click(x, y)
             return
         if self._pick_color_mode:
+            self._manual_calib_recent = False
             color = self._image.pixelColor(x, y)
             self._selected_color = (color.red(), color.green(), color.blue())
             state = self._active_color_state()
@@ -828,9 +838,10 @@ class DigitizerWindow(QtWidgets.QMainWindow):
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if (event.key() == QtCore.Qt.Key.Key_Z
                 and event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
-            self.undo_manual_click()
-            event.accept()
-            return
+            if self._calibration_mode == "manual" or self._manual_calib_recent:
+                self.undo_manual_click()
+                event.accept()
+                return
         if event.key() == QtCore.Qt.Key.Key_Escape and self._mask_mode:
             self.act_mask_manual.setChecked(False)
             event.accept()
@@ -838,6 +849,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         super().keyPressEvent(event)
 
     def place_points(self) -> None:
+        self._manual_calib_recent = False
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return
@@ -1177,12 +1189,22 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             return False
         file_path = Path(path)
         if file_path.suffix.lower() != ".csv":
-            file_path = file_path.with_suffix(".csv")
-        with file_path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(headers)
-            for row in rows:
-                writer.writerow([self._fmt_cell(value) for value in row])
+            # Append rather than with_suffix(): a dotted name like "fig3.final" must
+            # become "fig3.final.csv", not silently overwrite an unrelated "fig3.csv"
+            # the save dialog never validated.
+            file_path = file_path.with_name(file_path.name + ".csv")
+        try:
+            with file_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(headers)
+                for row in rows:
+                    writer.writerow([self._fmt_cell(value) for value in row])
+        except OSError as exc:
+            # A locked target (the previous export still open in Excel) is routine on
+            # Windows; without this guard the exception escapes the Qt slot and PyQt6
+            # aborts the whole app, losing all digitizing work.
+            self.status_label.setText(f"Could not write {file_path.name}: {exc}")
+            return False
         return True
 
     def _export_excel(self, headers: list[str], rows: list[list[float]]) -> bool:
@@ -1201,14 +1223,20 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             return False
         file_path = Path(path)
         if file_path.suffix.lower() != ".xlsx":
-            file_path = file_path.with_suffix(".xlsx")
+            # Append rather than with_suffix() - same reasoning as the CSV path.
+            file_path = file_path.with_name(file_path.name + ".xlsx")
         workbook = openpyxl.Workbook()
         sheet = workbook.active
         sheet.title = "Points"
         sheet.append(headers)
         for row in rows:
             sheet.append([self._fmt_cell(value) for value in row])
-        workbook.save(file_path)
+        try:
+            workbook.save(file_path)
+        except OSError as exc:
+            # Same guard as the CSV path: a locked file must not crash the app.
+            self.status_label.setText(f"Could not write {file_path.name}: {exc}")
+            return False
         return True
 
     def _fmt_cell(self, value: float) -> float:
@@ -1424,6 +1452,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._rebuild_color_slot_buttons()
 
     def run_axis_detection(self) -> None:
+        self._manual_calib_recent = False
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return
@@ -1498,6 +1527,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self._calibration_mode = None
         self._manual_stage = 0
         self._manual_undo.clear()
+        self._manual_calib_recent = False
         for key in self._manual_points:
             self._manual_points[key] = None
         self._hide_calib_guide()
@@ -1538,6 +1568,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             return
         self._exit_manual_mask_mode()
         self._calibration_mode = "manual"
+        self._manual_calib_recent = True
         self._manual_stage = 0
         for key in self._manual_points:
             self._manual_points[key] = None
@@ -1615,6 +1646,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
             self.status_label.setText("Nothing to undo.")
             return
         stage, snapshot = self._manual_undo.pop()
+        self._manual_calib_recent = True
         self._manual_stage = stage
         self._manual_points = dict(snapshot)
         self._calibration_mode = "manual"
@@ -1631,6 +1663,11 @@ class DigitizerWindow(QtWidgets.QMainWindow):
     def _handle_manual_calibration_click(self, x: int, y: int) -> None:
         # Snapshot BEFORE mutating, so Ctrl+Z restores both the points and the stage.
         self._manual_undo.append((self._manual_stage, dict(self._manual_points)))
+        self._manual_calib_recent = True
+        # A manual click supersedes any earlier coordinate-mediated calibration:
+        # _get_axis_points prefers _calibration_result, so leaving it set would make
+        # the re-done manual calibration silently ignored at export.
+        self._calibration_result = None
 
         px, py = float(x), float(y)
         snap_note = ""
@@ -1718,6 +1755,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         return [(left, top), (right, top), (right, bottom), (left, bottom)]
 
     def run_coordinate_calibration(self) -> None:
+        self._manual_calib_recent = False
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return
@@ -1744,6 +1782,7 @@ class DigitizerWindow(QtWidgets.QMainWindow):
         self.status_label.setText("Coordinate-mediated calibration complete.")
 
     def run_line_calibration(self) -> None:
+        self._manual_calib_recent = False
         if self._image is None:
             self.status_label.setText("Load an image first.")
             return

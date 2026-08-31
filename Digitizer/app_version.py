@@ -50,5 +50,5 @@ def _load() -> Tuple[str, str]:
 
 APP_NAME, APP_VERSION = _load()
 
-# "Data Digitizer 2.14" - the banner every entry point prints.
+# e.g. "Data Digitizer 2.15" - the banner every entry point prints.
 APP_TITLE = f"Data Digitizer {APP_VERSION}"

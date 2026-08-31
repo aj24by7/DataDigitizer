@@ -17,35 +17,11 @@ If you just want your data out, head to the [Quick start](#quick-start).
 
 ## Quick start
 
-1. Go to the **[Releases page](https://github.com/aj24by7/DataDigitizer/releases/latest)**. Scroll down until you see a heading called **Assets**, then click the file named **`Digitizer.exe`** to download it. (See [Download & install](#download--install-no-python-needed) for exactly what that page looks like.)
+1. Go to the **[Releases page](https://github.com/aj24by7/DataDigitizer/releases/tag/v2.15)**. Scroll down until you see a heading called **Assets**, then click the file named **`Digitizer.exe`** to download it. (See [Download & install](#download--install-no-python-needed) for exactly what that page looks like.)
 2. **Double-click `Digitizer.exe`** to open it. (*Double-click* means quickly press the left mouse button twice in a row on the file's icon.) On the very first run, Windows shows a blue warning box — click the small **More info** text, then the **Run anyway** button. This is normal and safe; the full explanation is in [Download & install](#the-first-run-windows-warning-expected).
 3. In the app, work top to bottom: **Import** your graph image → set the **curve color** → run **Axis Detection** → run **Calibration** → **Place Points** → **Export** to CSV.
 
 That's the whole flow. **Don't worry if those words mean nothing yet** — each one is explained, with exactly what to click, in [Using the app](#using-the-app-step-by-step) below.
-
----
-
-## What is new in 2.15
-
-- **Enhanced Human Click** (new, off by default). During *manual* calibration, each click is
-  snapped onto the crosshair, corner or axis line nearest it, to sub-pixel precision. A human
-  click lands about 0.9 px from its target; on a clean tick this recovers the true centre to
-  about 0.2 px. Turn it on under **Tools → Calibration → Enhanced Human Click**, adjust the
-  limit under **Enhanced Click Settings…**, and press **Ctrl+Z** to undo a click.
-- **Ctrl+Z now undoes a manual calibration click** whether or not snapping is on, so a
-  misclick no longer means restarting all four points.
-
-## What was new in 2.14
-
-- **A calibration bug that could silently skew your numbers is fixed.** In some figures the
-  axis detection could lock onto the wrong axis line, which quietly distorted every exported
-  value while the overlay still looked perfect. See the [changelog](https://github.com/aj24by7/DataDigitizer/blob/main/CHANGELOG.md) for the
-  detail. If you have results from an earlier version that looked right but scored badly,
-  they are worth re-running.
-- **Batch mode**: point it at a *folder* and it digitizes every image, with a per-image
-  report — see [Batch mode](#batch-mode--a-whole-folder-at-once).
-- **Batch accuracy scoring** for a whole folder against reference data.
-- Better automatic colour picking for thin and black curves, and more robust axis OCR.
 
 ---
 
@@ -55,7 +31,7 @@ You do **not** need Python, and you do **not** need to install anything. The OCR
 
 ### Step 1 — Open the Releases page
 
-Go to <https://github.com/aj24by7/DataDigitizer/releases/latest>.
+Go to <https://github.com/aj24by7/DataDigitizer/releases/tag/v2.15>.
 
 This is a GitHub *release page*. It shows a title and a description at the top. **Scroll down** past the description until you see a grey heading called **Assets** with a small triangle next to it. If the list under it looks collapsed, click the word **Assets** to open it.
 
@@ -89,37 +65,6 @@ To run it:
 *(If you accidentally clicked **Don't run**, nothing bad happened — just double-click `Digitizer.exe` again and try the steps above.)*
 
 You'll only need to do this once.
-
-### Nothing happens at all when you double-click? (Smart App Control)
-
-If double-clicking `Digitizer.exe` produces **no window, no error, no warning box** -- just
-nothing -- you are almost certainly running into **Smart App Control**, which is **on by
-default on new Windows 11 installations**. It is stricter than SmartScreen: where
-SmartScreen warns and offers *Run anyway*, Smart App Control blocks unsigned programs
-**silently**. There is no dialog and no *Run anyway* button, so the app simply appears to
-do nothing.
-
-**How to confirm it:** open **Windows Security -> App & browser control -> Smart App
-Control**. If it says **On**, that is what is stopping the app. You can also check
-**Event Viewer -> Applications and Services Logs -> Microsoft -> Windows -> CodeIntegrity
--> Operational** for a *"Smart App Control Block"* entry naming `Digitizer.exe`.
-
-**What you can do:**
-
-- **Run it from source instead (recommended, no downsides).** This is not blocked, because
-  Python itself is signed. See [Run from source](#run-from-source-for-developers), then
-  **double-click `Digitizer.pyw`** -- it opens the same GUI with no console window. This is
-  the best option if you already have Python.
-- **Ask for a signed build.** The only real fix is for the app to be code-signed with a
-  certificate. Until then, Smart App Control will keep blocking it on machines where it is
-  enabled.
-- **Turning Smart App Control off** does allow the app to run, but think carefully first:
-  > **This is a one-way door.** Microsoft does not let you turn Smart App Control back on
-  > once it is off -- re-enabling it requires **resetting or reinstalling Windows**. It
-  > also lowers protection for *every* program on the machine, not just this one. Prefer
-  > running from source above.
-
-This is not specific to version 2.14 -- it affects every unsigned release equally.
 
 ---
 
@@ -159,35 +104,7 @@ The app uses OCR (text recognition) to read the numbers printed along your axes 
 
 ### 4. Check and fix the axis numbers
 
-Look at the four **Min-Max Coordinates** boxes. OCR is good but not perfect, so **always sanity-check them.** If any value is missing or misread, type the correct number into the box yourself.
-
-> ### Read this before you change a number
->
-> **These four boxes are not "the range of your graph". They are the values of the four
-> specific tick marks the detector locked onto** — and it does not always lock onto the
-> outermost ones.
->
-> If it anchored on an inner gridline, the box will show *that gridline's* value, and that
-> is correct. Replacing it with your axis's true end value tells the tool "this pixel row
-> means 0" about a row that actually means something else, and **every exported number is
-> then rescaled and wrong** — silently, with a perfect-looking overlay.
->
-> Measured on a real spectrum whose Y detection anchored on the `0.2` gridline:
->
-> | What you type for Y-min | RMSE | R² |
-> | --- | --- | --- |
-> | `0.2` — the value of the tick it anchored on | 0.026 | **0.950** |
-> | `0` — the true bottom of the axis | 0.225 | **−2.71** |
->
-> Both runs report success. Correlation is **identical (0.975)** either way, so eyeballing
-> the curve shape will not catch it.
->
-> **So:** only change a box when the tool misread *that tick's own printed label* (it shows
-> `8` where the tick is clearly labelled `800`). Check which ticks it used first — in the app
-> the detected values are shown in the Axis Scale Detection submenu; on the command line run
-> with `--verbose 1` and read the `tick -> values` line. If you want to force the axis
-> endpoints specifically, supply the tick pixel positions too (`--ticks`), which pins both
-> halves of the mapping.
+Look at the four **Min-Max Coordinates** boxes. OCR is good but not perfect, so **always sanity-check them.** If any value is missing or misread, just **type the correct number into the box** yourself.
 
 > These four values are required. Export will not run until all four boxes contain valid numbers.
 
@@ -265,30 +182,6 @@ Most plots are linear, so leave this alone for a normal graph — but if your gr
 
 > A log axis needs **positive** min/max values (you can't take the log of zero or a negative number). If a value is zero or negative, export will tell you instead of producing wrong numbers.
 
-### Resolution matters more than anything else
-
-**The single biggest cause of wrong numbers is an image whose axis labels are too small to
-read.** Everything downstream depends on OCR getting the printed tick numbers right; when it
-misreads one, every exported value is rescaled — and the run still reports success, with a
-high confidence score and an overlay that sits perfectly on the curve.
-
-Measured on plain matplotlib charts saved at the default figure size, then re-saved at
-`dpi=200` with nothing else changed:
-
-| chart | saved small | saved at dpi=200 |
-| --- | --- | --- |
-| exponential decay | **55.5%** error | **1.14%** |
-| decimal ticks (`2.5`) | **93.3%** error | **1.00%** |
-| offset axes (100–200) | **278.9%** error | **0.76%** |
-
-Same tool, same charts. Only the pixel size of the tick labels changed.
-
-**So:** feed it the largest version of the figure you have. Roughly 1000 px on the short side
-is comfortable; below ~700 px the app now prints a warning. If you only have a small image,
-check the numbers it read (`--verbose 1`, or the Axis Scale Detection panel in the app) and
-supply them yourself if they are wrong — see the warning in
-[step 4](#4-check-and-fix-the-axis-numbers) about what those values actually mean.
-
 ### Tips for the best results
 
 - A **clean, distinctly-colored curve** works best. Point extraction matches your selected color within a tolerance and takes the vertical midpoint of matching pixels in each column.
@@ -343,7 +236,7 @@ Add any of these to the command for more control:
 | `pic_path` *(positional)* | Path to the image. A bare filename is searched in the current folder, then Downloads. Either this **or** `--pic-dir` is required. | none (required) |
 | `--pic-dir` | Another way to give the image path. If both are given, `--pic-dir` wins. | none |
 | `--color R,G,B` | Curve color, e.g. `255,0,0` (each part 0–255). Also accepts `[r,g,b]`. **Must match your curve's actual color**, or the run finds no points. | auto-detected |
-| `--axis-values` *(`--axis`)* | Values of the four **detected tick positions**, as `xmin,xmax,ymin,ymax` — *not* the plot corners unless the detector anchored on them. See the warning in [step 4](#4-check-and-fix-the-axis-numbers); pair with `--ticks` to pin the pixels too. X min must differ from X max, and Y min from Y max. | read by OCR |
+| `--axis-values` *(`--axis`)* | Axis numbers as `xmin,xmax,ymin,ymax`. X min must differ from X max, and Y min from Y max. | read by OCR |
 | `--ticks` *(`--tick-setting`, `--tick-coordinates`)* | Four tick pixel points in `x_min,x_max,y_min,y_max` order, e.g. `[10,200],[500,200],[10,200],[10,20]`. | found by OCR |
 | `--log-x` | Read the X axis in base-10 **log** space (X min/max must be positive). Mirrors the GUI's **log** toggle. | off (linear) |
 | `--log-y` | Read the Y axis in base-10 **log** space (Y min/max must be positive). Mirrors the GUI's **log** toggle. | off (linear) |
@@ -352,16 +245,8 @@ Add any of these to the command for more control:
 | `--json` | Print the result details as JSON instead of plain text. | off |
 | `-h` / `--help` | Show the usage help and exit. | — |
 | `--normalize-y` *(optional extra)* | Adds an extra `y_norm` column (Y rescaled to 0–1 over the axis range). Leave it off for normal use. | off |
-| `--limit-to-calibration` *(optional extra)* | Export **only** points inside the calibration box. Off unless you ask for it — see the warning below. | off |
-| `--no-limit-to-calibration` *(optional extra)* | Keep points outside the calibration box. **This is already the default**; the flag is kept so existing scripts keep working. | (default) |
-
-> **Why `--limit-to-calibration` is off by default.** The calibration box is built from the
-> tick positions OCR found. If it reads an outermost tick even slightly short, the box is
-> smaller than the real plot area, and limiting to it **silently clips real data off the ends
-> of your curve**. On `example_3_corundum_raman.png` that is not a subtle effect: limiting
-> keeps **81 of 930 points** — 91% of the spectrum discarded, with no error. Every entry
-> point (GUI, CLI, batch, and the `digitize_image()` API) now defaults to keeping everything.
-> Turn it on deliberately when you *want* to crop to the axes, not as a matter of course.
+| `--limit-to-calibration` *(optional extra)* | Export **only** points inside the calibration box. **Off by default** (since 2.14): if OCR reads an extreme tick slightly short, the box would otherwise clip real data off the ends of the curve. | off |
+| `--no-limit-to-calibration` *(optional extra)* | Also export points outside the calibration box. This is **already the default**; the flag is kept so older scripts keep working. | (the default) |
 
 ### The "fill-in-the-blank" template and function-call style
 
@@ -401,7 +286,7 @@ The values you can put inside `digitizer_cli(...)`:
 | `verbose` *(`v`)* | `1` prints full detail and writes a `<image>_log.txt`; `0` stays quiet. | `0` |
 | `json` *(`as_json`, `print_json`)* | `True` prints full details as JSON. **Only accepted in this function-call form** (the flag version is `--json`). | False |
 | `normalize_y` *(`normalize`)* — *optional extra* | `True` adds the `y_norm` (0–1) column. Leave off for normal use. | False |
-| `limit_to_calibration` *(`limit`)* — *optional extra* | `True` keeps **only** points inside the calibration window. | False |
+| `limit_to_calibration` *(`limit`)* — *optional extra* | `True` keeps only points inside the calibration window. | False |
 
 Arguments can be **positional** in the order `pic_dir, color, tick_setting, axis_values, output_dir`, or by **name** using any alias above. Empty positions are allowed and fall back to defaults, and the words `none` / `null` / blank are treated as "auto".
 
@@ -482,103 +367,9 @@ The CSV columns:
 
 ---
 
-## Batch mode — a whole folder at once
-
-Point `digitizer.py` at a **folder** instead of a single image and it digitizes every image
-inside, one after another:
-
-```powershell
-py digitizer.py "C:\path\to\my_images" --output-dir "C:\path\to\results"
-```
-
-Every option from the [table above](#options) still applies and is used for **all** images
-in the folder — so `--color 0,0,0` means "every curve in this folder is black". The two
-exceptions are `--pic-dir` (the folder is the positional argument here) and `--json` (batch
-already writes machine-readable `batch_report.json`); both are rejected by the batch parser.
-
-### What batch mode gives you
-
-```text
-results\
-    digitized_csvs\       one <image>_digitized_points.csv per image
-    digitized_overlays\   one <image>_digitized_overlay.png per image
-    batch_report.csv      per-image: ok / failed / skipped, point count, reason
-    batch_report.json     the same, plus totals and the overall failure rate
-```
-
-Open a few overlays: if the coloured dots sit on the curve, that image digitized well.
-
-> **An overlay can look perfect while the numbers are wrong.** Overlays draw *pixel*
-> positions, so they show which pixels were detected — not whether those pixels were
-> converted to the right values. A broken axis calibration produces a beautiful overlay and
-> useless data. Check the CSV, not just the picture.
-
-### How it handles trouble
-
-Batch mode is built so **one bad image cannot ruin the run**:
-
-- **Per-file isolation** — an image that fails is recorded as `failed` with the reason, and
-  the run continues to the next one.
-- **Non-image files** are reported as `skipped`, never silently ignored.
-- **Duplicate names** (case-insensitively, e.g. `Plot.png` and `plot.PNG`) are refused
-  rather than one silently overwriting the other.
-- **Partial output is cleaned up** if a file fails midway, so you never keep half a CSV.
-- Every input file appears in `batch_report.csv` exactly once. The report is the record of
-  what happened; nothing is dropped without a line explaining it.
-
-### Scoring a batch against known-good data
-
-If you have reference ("ground truth") CSVs, the Accuracy Tester scores a whole folder by
-matching file names:
-
-```powershell
-cd ..\AccuracyTester
-py accuracy_batch_cli.py --digitized-dir "C:\path\to\results\digitized_csvs" --ground-truth-dir "C:\path\to\truth"
-```
-
-It writes `accuracy_report\accuracy_report.csv` (one row per image: RMSE, correlation, MSE,
-R2, and more, plus a `status`) and `accuracy_summary.json` (the overall failure rate).
-
-Matching is deliberately strict: a `_digitized_points` / `_digitized` / `_points` / `_gt`
-suffix is stripped before comparing stems, exact matches win, and if several files match one
-reference equally well it reports `ambiguous_match` rather than guessing.
-
-| Status | Means |
-| --- | --- |
-| `ok` | Pair scored; metrics present. |
-| `no_method_match` | A reference file with no digitized file to compare against — that image failed to digitize. |
-| `no_ground_truth_match` | A digitized file whose name matches no reference. |
-| `ambiguous_match` | Several files matched one reference equally well; reported, never guessed. |
-| `invalid_data` | Can't be scored as y=f(x) — e.g. a vertical line, where one x has many y values. |
-| `insufficient_overlap` | The two curves share too little X range to compare. |
-| `parse_error` | A CSV could not be read (corrupt, empty, malformed). |
-
-### Reading the accuracy numbers honestly
-
-Two traps worth knowing, because the raw CSV will happily print a number in both cases:
-
-- **Quote `nrmse_range_pct`, not raw RMSE.** RMSE carries the units of the Y axis. An RMSE
-  of 63.9 on an axis running to 30,000 is *better* than 0.03 on an axis running 0–1. The
-  `nrmse_range_pct` column expresses the error as a percentage of that figure's own Y range,
-  which is comparable across figures.
-- **Correlation and R2 are undefined against a flat reference.** Both divide by the variance
-  of the reference data, which is zero for a horizontal line. The CSV prints a degenerate
-  value (e.g. `-2.6e+25`); the honest reading is **N/A**, not "terrible accuracy".
-
----
-
 ## Run from source (for developers)
 
 You'll need a **recent Python 3** installed (from <https://python.org> — tick *"Add python.exe to PATH"* during setup).
-
-> **OCR needs the Tesseract program, not just the Python package.** `requirements.txt`
-> installs `pytesseract`, which is only a *wrapper* — it cannot read anything on its own.
-> For axis detection to work from source, install **Tesseract 5.5 for Windows** (the UB
-> Mannheim build) and let the installer add it to your PATH, or set `TESSERACT_CMD` to its
-> full path. Without it, `py digitizer.py graph.png` stops with
-> *"Tesseract OCR executable not found"*. Passing `--axis` is **not** enough on its own —
-> tick *positions* are still read by OCR, so you would need `--ticks` as well. The prebuilt
-> `Digitizer.exe` from Releases has Tesseract bundled and needs none of this.
 
 1. Get the source code — download it from the [repo](https://github.com/aj24by7/DataDigitizer) or clone it:
 
@@ -598,13 +389,6 @@ You'll need a **recent Python 3** installed (from <https://python.org> — tick 
    py digitizer_2_11.py
    ```
 
-   Or just **double-click `Digitizer.pyw`** in the `Digitizer` folder. That opens the same
-   window with **no console/command prompt behind it**, so it behaves like a normal desktop
-   app -- and because it loads the source directly, it always reflects the current code with
-   no rebuild. This is also the way to run the app if
-   [Smart App Control](#nothing-happens-at-all-when-you-double-click-smart-app-control) is
-   blocking the `.exe`.
-
 The command-line interface ([above](#using-the-command-line)) also runs from this same source setup.
 
 The dependencies are: `PyInstaller` (for building the exe), `PyQt6` (the window), `numpy`, `pillow` (image handling), `pytesseract` (OCR), and `openpyxl` (Excel export).
@@ -620,24 +404,6 @@ The project is plain Python (a PyQt6 GUI plus a small CLI). There are three "sha
 | **CLI** | `python3 digitizer.py …` | No build needed — it runs straight from the source files with Python (see [Run from source](#run-from-source-for-developers)). |
 | **Windows `.exe`** | a one-file `Digitizer.exe` you double-click | PyInstaller reads `digitizer.spec`, bundles the GUI entry `digitizer_desktop.py` **and** the Tesseract OCR runtime in `vendor\tesseract`, and writes `dist\Digitizer.exe`. |
 | **macOS `.app`** | a `Digitizer.app` bundle | Same tool, the macOS specs/scripts in the separate **[digitizer_mac](https://github.com/RayanA07/digitizer_mac)** repo (`bash build_macos.sh`) produce `Digitizer.app`. |
-
-### Before you build from a fresh clone
-
-The bundled OCR runtime under `Digitizer\vendor\tesseract` is **not committed to this
-repository** — it is a third-party binary distribution of ~83 MB with its own licence, so it
-is excluded by `.gitignore`. A fresh clone will not have it. The build still succeeds, but it
-prints a loud warning and the resulting exe has **no OCR** -- axis detection will not work for
-anyone you hand it to, even though it may appear to work on your own machine if you have
-Tesseract installed separately.
-
-To restore it, install **Tesseract 5.5 for Windows** (the UB Mannheim build) and copy the
-installed folder — `tesseract.exe`, its DLLs, and `tessdata` — to
-`Digitizer\vendor\tesseract`. This repo was built against `tesseract v5.5.0.20241111`
-with leptonica 1.85.0.
-
-If you only want to **run from source** rather than build the exe, you do not need this:
-install Tesseract normally and it will be found on your PATH. And if OCR is unavailable
-entirely, everything still works — you just type the four axis values in by hand.
 
 ### Starter command (Windows)
 
@@ -675,19 +441,9 @@ Python isn't installed (or wasn't added to your PATH). Install it from <https://
 The color it's matching doesn't match your curve. If you passed `--color` (or `color=`), the values are wrong — fix them, or drop the option entirely to let it auto-detect. The placeholder `255,0,0` (red) in the template will fail on any non-red plot.
 
 **The axis numbers came out wrong.**
-OCR can misread numbers. Always check them — but **check *which ticks* it used before you
-override anything** (see [the warning in step 4](#4-check-and-fix-the-axis-numbers)).
-- *First:* run with `--verbose 1` and read the `tick -> values` line. That tells you which
-  four ticks the tool anchored on and what it thinks each one is worth.
-- *Then, in the app:* type the correct value for **that tick** into the **Min-Max
-  Coordinates** box — not your axis's end value, unless the tick it anchored on really is
-  the end of the axis.
-- *On the command line:* `--axis xmin,xmax,ymin,ymax` (or `axis_values=(...)` in the
-  function-call form) sets the values of the **detected tick positions**, not the plot
-  corners. Supplying your true axis range when the tool anchored on an inner tick rescales
-  every exported number and reports success anyway.
-- *To pin both halves yourself:* pass `--ticks` alongside `--axis` so the pixel positions and
-  the values are both yours. This is the only fully unambiguous way to override the mapping.
+OCR can misread numbers. Always check them.
+- *In the app:* type the correct value into the **Min-Max Coordinates** box.
+- *On the command line:* give them with `--axis xmin,xmax,ymin,ymax` (flags) or `axis_values=(xmin,xmax,ymin,ymax)` (function-call form). Run with `--verbose 1` to see the **OCR confidence score** — a low number is a strong hint that you should type the axis values in yourself with `--axis`.
 
 **"Image file not found" on the command line.**
 Put the image in your **Downloads** folder or in the folder the terminal is pointed at (a bare filename is searched in both), or pass the **full path in quotes**, e.g. `py digitizer.py "C:\Users\You\Pictures\graph.png"`.
@@ -704,12 +460,10 @@ Check the status bar (the thin strip at the bottom). You need **all four Min-Max
 ## Folder contents
 
 ```text
-digitizer.py        # Entry point: dispatches single-image vs batch (folder) runs
+digitizer.py        # CLI / function-call launcher
 digitizer_2_11.py   # GUI + CLI dispatch and runtime path setup
 digitizer_desktop.py# GUI-only entry used by the PyInstaller build
-Digitizer.pyw       # Runs the GUI from source with no console window (no rebuild needed)
-digitizer_cli.py    # Terminal CLI (single image)
-digitizer_batch_cli.py # Terminal CLI (whole folder) + batch_report
+digitizer_cli.py    # Terminal CLI
 digitizer_api.py    # Programmatic API (digitize_image)
 function.py         # Thin re-export of digitize_image
 UI.py               # Main window and GUI workflows
@@ -717,19 +471,12 @@ ImageTray.py        # Canvas rendering and interaction
 PointPlacer.py      # Color-based point extraction + interpolation
 AxisReader.py       # OCR axis detection
 Calibration.py      # Calibration strategies
-EnhancedClick.py    # Sub-pixel snap of a manual click onto the nearest tick feature
 Masking.py          # OCR / manual masking helpers
 ErrorLogger.py      # Error logging utilities
 digitizer.spec      # PyInstaller spec (Digitizer.exe)
-build.cmd           # One-click build (double-click this)
 build_windows.ps1   # Build script
 requirements.txt    # Python dependencies
-requirements-dev.txt# Test-only deps (pytest)
-version.json        # App name + version (read at runtime by app_version.py)
-app_version.py      # Single source of truth for the version string
-test_calibration.py # Tests for the axis-pair repair in calibration
-test_enhanced_click.py # Tests for the click snapping
-benchmark_enhanced_click.py # Measures the snap against simulated human click noise
+version.json        # App name + version
 assets/             # Application icon
 vendor/tesseract/   # Bundled Tesseract OCR runtime
 ```
@@ -743,7 +490,7 @@ This is a **separate, optional** tool. It's completely independent of the main D
 **What it does:** it measures how faithfully a digitized curve reproduces a reference curve. You load **two CSV files** — an *original* reference and a *digitized* one — and it lines them up on a common X grid and reports accuracy numbers (MAE, RMSE, R-squared, bias, MAPE/sMAPE/WAPE, and more) alongside diagnostic plots: the curve overlay, residuals, absolute error, and zoomable outliers. It cleans messy data (drops non-numeric rows, collapses duplicate X values), can filter by color slot, and can optionally optimize a constant X-shift before comparing. Results can be exported to a comparison CSV.
 
 **Run the app (no Python needed):**
-Double-click **`AccuracyTester.exe`** (download it from [Releases](https://github.com/aj24by7/DataDigitizer/releases/latest), or, if you built from source, find it in the `AccuracyTester` folder). It's a windowed, one-file app — no install or console needed.
+Double-click **`AccuracyTester.exe`** (download it from [Releases](https://github.com/aj24by7/DataDigitizer/releases/tag/v2.15), or, if you built from source, find it in the `AccuracyTester` folder). It's a windowed, one-file app — no install or console needed.
 
 **Run from source:**
 

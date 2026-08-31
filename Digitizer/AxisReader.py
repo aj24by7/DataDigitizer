@@ -184,19 +184,27 @@ def _preprocess_for_ocr(image: "Image.Image") -> "Image.Image":
 
 
 def _extract_numbers(image: "Image.Image") -> List[DetectedNumber]:
-    # Whitelist digits, sign, decimal point, and comma. The comma lets a thousands
+    # Whitelist digits, sign, decimal point, comma, and e/E. The comma lets a thousands
     # separator ("1,000") come through as one token instead of being split; it is
-    # stripped in _parse_number. (Axis labels are numbers, so no letters are allowed.)
-    config = "--psm 6 -c tessedit_char_whitelist=0123456789.-+,"
+    # stripped in _parse_number. e/E is needed for scientific-notation labels ("1e3",
+    # "1E+05") common on log axes - without it Tesseract could never emit them and
+    # _parse_number's exponent support was unreachable.
+    config = "--psm 6 -c tessedit_char_whitelist=0123456789.-+,eE"
     data = pytesseract.image_to_data(image, output_type=Output.DICT, config=config)
+    _sci_notation = re.compile(r"^[-+]?(?:\d+(?:\.\d*)?|\.\d+)[eE][-+]?\d+$")
     results: list[DetectedNumber] = []
     count = len(data.get("text", []))
     for i in range(count):
         text = data["text"][i].strip()
         if not text:
             continue
-        text = text.replace(",", "").replace("−", "-")
-        if any(ch.isalpha() for ch in text):
+        # Both Unicode minus (U+2212) and en-dash (U+2013) render as a minus sign in
+        # figures; map both so a negative label keeps its sign (Masking.py does the same).
+        text = text.replace(",", "").replace("−", "-").replace("–", "-")
+        # Letters mean the token is not an axis number (e.g. a title fragment) - unless
+        # the token is exactly scientific notation, the one numeric form that contains
+        # a letter.
+        if any(ch.isalpha() for ch in text) and not _sci_notation.match(text):
             continue
         value = _parse_number(text)
         if value is None:
@@ -316,9 +324,10 @@ def _line_inliers(
 
     `prefer_sign` is the expected sign of value-vs-pixel slope (+1 for X, where value
     grows rightward; -1 for Y, where value grows upward as pixel-y shrinks). It breaks
-    ties toward the normal axis orientation, which is what lets a single misread be
-    dropped even when only three ticks are present (median-slope fitting can't, because
-    one bad tick out of three exceeds its breakdown point).
+    ties toward the normal axis orientation, filtering out candidate lines that run
+    against the axis direction. (Note: with only three ticks the caller still keeps
+    the raw extremes - see _robust_endpoints - because a 2-of-3 "consensus" is a
+    coin flip between the correct pair and a pair containing the misread.)
     """
     import math
 
@@ -361,11 +370,14 @@ def _robust_endpoints(
     """Pick the axis min/max from the two extreme *consistent* ticks.
 
     A tick's value must sit on a straight (or log) line vs its pixel position, so
-    a single misread label (e.g. a negative "-5" read as "9", or a decimal misread)
-    is rejected as an outlier and the scale is taken from the ticks that agree.
-    Falls back to the raw extremes when there are too few ticks to vote (<3) or no
-    consistent pair is found. The two returned ticks anchor the calibration scale,
-    so dropping a misread endpoint still yields the correct mapping by extrapolation.
+    a minority of misread labels (e.g. a negative "-5" read as "9", or a decimal
+    misread) is rejected as outliers and the scale taken from the ticks that agree.
+    Rejection needs a ~2/3 supermajority, which takes at least FOUR ticks: with only
+    three, one misread leaves two survivors, and any two points form a perfect line -
+    the correct pair and a wrong pair tie exactly, so there is no trustworthy
+    consensus and the raw extremes are kept instead. The two returned ticks anchor
+    the calibration scale, so dropping a misread endpoint still yields the correct
+    mapping by extrapolation.
     """
     if len(cluster) < 3:
         return _min_max_from_cluster(cluster, axis)

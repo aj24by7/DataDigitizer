@@ -60,8 +60,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
 
+    from digitizer_cli import _detach_nonnumeric_verbose
+
     parser = build_parser()
-    args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
+    raw_args = _detach_nonnumeric_verbose(list(sys.argv[1:] if argv is None else argv))
+    args = parser.parse_args(raw_args)
 
     input_dir_arg = args.input_dir_option or args.input_dir
     if not input_dir_arg:
@@ -134,6 +137,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                                    None, "", "", 0.0))
 
     report_csv, report_json, summary = write_reports(records, output_parent)
+    if args.as_json:
+        print(json.dumps({**summary, "images": [asdict(r) for r in records]}, indent=2))
     print()
     print(f"Batch complete: {summary['succeeded']}/{summary['attempted']} images digitized, "
           f"{summary['failed']} failed"
@@ -217,9 +222,10 @@ def run_batch(
             continue
 
         # Move the overlay into the overlays subfolder (and the log to the parent),
-        # so the two subfolders stay pure (CSVs / overlay images).
-        final_overlay = overlay_dir / overlay_tmp.name
-        _move(overlay_tmp, final_overlay)
+        # so the two subfolders stay pure (CSVs / overlay images). _move returns where
+        # the file actually is, so a locked destination cannot make the report point
+        # at an overlay that was never written.
+        final_overlay = _move(overlay_tmp, overlay_dir / overlay_tmp.name)
         if log_tmp.exists():
             _move(log_tmp, log_dir / log_tmp.name)
 
@@ -243,13 +249,16 @@ def _remove_partial(paths: Sequence[Path], preexisting: set) -> None:
             pass  # best-effort; the report row already says failed
 
 
-def _move(src: Path, dst: Path) -> None:
+def _move(src: Path, dst: Path) -> Path:
+    """Move src to dst; on failure (e.g. dst locked by a viewer) leave src in place
+    and return the path that actually holds the file, so reports stay truthful."""
     try:
         if dst.exists():
             dst.unlink()
         shutil.move(str(src), str(dst))
+        return dst
     except OSError:
-        pass  # non-fatal; the CSV is the primary artifact
+        return src  # non-fatal; the CSV is the primary artifact
 
 
 def write_reports(records: Sequence[ImageRecord], output_parent: Path):
@@ -279,6 +288,11 @@ def write_reports(records: Sequence[ImageRecord], output_parent: Path):
         encoding="utf-8",
     )
     return report_csv, report_json, summary
+
+
+def _verbose_value(token: str):
+    from digitizer_cli import _verbose_value as _impl
+    return _impl(token)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -325,8 +339,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-y", dest="log_y", action="store_true",
                         help="Treat the Y axis as base-10 logarithmic on every image.")
     parser.add_argument(
-        "-v", "--verbose", dest="verbose", nargs="?", type=int, const=1, default=0,
+        "-v", "--verbose", dest="verbose", nargs="?", type=_verbose_value, const=1, default=0,
         help="Verbosity level. At 1, each image also gets a <stem>_log.txt run record.",
+    )
+    parser.add_argument(
+        "--json", dest="as_json", action="store_true",
+        help="Also print the batch report (summary + per-image records) as JSON to stdout.",
     )
     parser.add_argument("--normalize-y", action="store_true", help="(Optional) Add a y_norm column to each CSV.")
     parser.add_argument(

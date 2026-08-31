@@ -423,7 +423,11 @@ def _find_black_border_box(
             max_y = int(row_hits.max())
             min_x = int(col_hits.min())
             max_x = int(col_hits.max())
-            return [(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)]
+            # Two hits a few pixels apart are one thick spine, not opposite borders
+            # (a 2px bottom spine yields rows {y, y+1}). Without this gate the "box"
+            # collapses to ~1px and every exported value is silently rescaled.
+            if (max_y - min_y) >= int(height * 0.25) and (max_x - min_x) >= int(width * 0.25):
+                return [(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)]
 
         # Fallback: bounding box of all black pixels.
         ys, xs = np.where(mask)
@@ -480,7 +484,9 @@ def _find_black_border_box(
         max_y = max(row_hits)
         min_x = min(col_hits)
         max_x = max(col_hits)
-        return [(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)]
+        # Same thick-spine gate as the numpy branch: adjacent hits are one border.
+        if (max_y - min_y) >= int(height * 0.25) and (max_x - min_x) >= int(width * 0.25):
+            return [(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)]
 
     min_x = width
     max_x = -1

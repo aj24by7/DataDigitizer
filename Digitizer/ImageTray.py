@@ -233,8 +233,12 @@ class ImageTray(QtWidgets.QWidget):
             return 0, 0
         rel_x = (pos.x() - target.left()) / target.width()
         rel_y = (pos.y() - target.top()) / target.height()
-        x = int(round(rel_x * self._image.width()))
-        y = int(round(rel_y * self._image.height()))
+        # floor, not round: displayed pixel i covers [i, i+1) in image coordinates, so
+        # rounding sent the right/bottom half of every screen pixel to its neighbour -
+        # a click squarely inside a 1px curve on an upscaled display sampled the
+        # adjacent background pixel.
+        x = int(rel_x * self._image.width())
+        y = int(rel_y * self._image.height())
         x = max(0, min(x, self._image.width() - 1))
         y = max(0, min(y, self._image.height() - 1))
         return x, y

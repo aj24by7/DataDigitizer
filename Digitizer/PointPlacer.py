@@ -81,13 +81,20 @@ def find_points_by_color(
     if not mask.any():
         return []
 
-    col_has = mask.any(axis=0)
-    top = mask.argmax(axis=0)
-    bottom = (height - 1) - mask[::-1, :].argmax(axis=0)
-    mid = (top + bottom) / 2.0
-
-    xs = np.nonzero(col_has)[0]
-    return [PlacedPoint(x=float(x), y=float(mid[x])) for x in xs]
+    # A column can contain the curve AND another same-coloured object (e.g. an in-plot
+    # legend's line sample, which text masking never covers). The old top/bottom midpoint
+    # placed the point halfway between the two, in empty space. Instead, split each
+    # column's ink into contiguous runs (bridging small anti-aliasing gaps) and take the
+    # midpoint of the largest run, preferring the run nearest the previous column's point
+    # on ties - identical to the old behaviour whenever a column holds a single run.
+    points: list[PlacedPoint] = []
+    prev_y: Optional[float] = None
+    for x in np.nonzero(mask.any(axis=0))[0]:
+        ys = np.nonzero(mask[:, x])[0]
+        y_mid = _pick_run_mid(_split_runs(ys.tolist()), prev_y)
+        prev_y = y_mid
+        points.append(PlacedPoint(x=float(x), y=float(y_mid)))
+    return points
 
 
 def _find_points_py(
@@ -101,8 +108,9 @@ def _find_points_py(
     exclude_rects: Optional[List[Tuple[float, float, float, float]]],
 ) -> List[PlacedPoint]:
     points: list[PlacedPoint] = []
+    prev_y: Optional[float] = None
     for x in range(width):
-        y_top = _scan_column(
+        ys = _column_hits(
             data,
             bytes_per_line,
             height,
@@ -110,27 +118,77 @@ def _find_points_py(
             target_rgb,
             tol,
             min_chroma,
-            True,
             exclude_rects,
         )
-        if y_top is None:
+        if not ys:
             continue
-        y_bottom = _scan_column(
-            data,
-            bytes_per_line,
-            height,
-            x,
-            target_rgb,
-            tol,
-            min_chroma,
-            False,
-            exclude_rects,
-        )
-        if y_bottom is None:
-            continue
-        y_mid = (y_top + y_bottom) / 2.0
+        y_mid = _pick_run_mid(_split_runs(ys), prev_y)
+        prev_y = y_mid
         points.append(PlacedPoint(x=float(x), y=float(y_mid)))
     return points
+
+
+# One drawn stroke often splits into fragments: anti-aliasing, compression, and the
+# colour-tolerance fringe on noisy curves leave gaps measured at 8-27px on real
+# spectra. Gaps up to this size are bridged so those fragments stay one run, while a
+# separate object (an in-plot legend's line sample) further away stays its own run
+# instead of dragging the midpoint into empty space.
+_RUN_BRIDGE_PX = 32
+
+
+def _split_runs(ys: List[int]) -> List[Tuple[int, int]]:
+    """Group sorted pixel rows into contiguous runs, bridging small gaps."""
+    runs: list[Tuple[int, int]] = []
+    start = prev = ys[0]
+    for y in ys[1:]:
+        if y - prev > _RUN_BRIDGE_PX + 1:
+            runs.append((start, prev))
+            start = y
+        prev = y
+    runs.append((start, prev))
+    return runs
+
+
+def _pick_run_mid(runs: List[Tuple[int, int]], prev_y: Optional[float]) -> float:
+    """Midpoint of the best run: largest first, then nearest the previous column's
+    point (curve continuity), then topmost - deterministic on full ties."""
+    best_key = None
+    best_mid = 0.0
+    for start, end in runs:
+        mid = (start + end) / 2.0
+        dist = abs(mid - prev_y) if prev_y is not None else 0.0
+        key = (-(end - start), dist, mid)
+        if best_key is None or key < best_key:
+            best_key = key
+            best_mid = mid
+    return best_mid
+
+
+def _column_hits(
+    data: bytes,
+    bytes_per_line: int,
+    height: int,
+    x: int,
+    target_rgb: Tuple[int, int, int],
+    tol: int,
+    min_chroma: Optional[int],
+    exclude_rects: Optional[List[Tuple[float, float, float, float]]],
+) -> List[int]:
+    """All matching pixel rows in a column, top to bottom (pure-Python path)."""
+    hits: list[int] = []
+    for y in range(height):
+        if exclude_rects and _is_excluded(x, y, exclude_rects):
+            continue
+        idx = y * bytes_per_line + x * 3
+        r = data[idx]
+        g = data[idx + 1]
+        b = data[idx + 2]
+        if min_chroma is not None:
+            if (max(r, g, b) - min(r, g, b)) < min_chroma:
+                continue
+        if _match_rgb(r, g, b, target_rgb, tol):
+            hits.append(y)
+    return hits
 
 
 def _scan_column(

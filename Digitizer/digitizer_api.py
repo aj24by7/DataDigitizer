@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -441,8 +442,23 @@ def _build_export_rows(window: DigitizerWindow, normalize_y: bool) -> tuple[list
                 y_val = window._interp_axis(y_frac, y_min_val, y_max_val, window._y_log)
             row: list[float] = [index + 1, color_r, color_g, color_b, x_val, y_val, x_px, y_px]
             if normalize_y:
-                denom = y_max_val - y_min_val
-                row.append((y_val - y_min_val) / denom if denom else 0.0)
+                # Mirror the GUI's export_points exactly: on a log-Y axis y_norm is the
+                # fraction in log10 space, not the linear fraction, so CLI and GUI CSVs
+                # agree for the same image.
+                if window._y_log:
+                    if y_val <= 0 or y_min_val <= 0 or y_max_val <= 0:
+                        y_norm = 0.0
+                    else:
+                        log_denom = math.log10(y_max_val) - math.log10(y_min_val)
+                        y_norm = (
+                            (math.log10(y_val) - math.log10(y_min_val)) / log_denom
+                            if log_denom
+                            else 0.0
+                        )
+                else:
+                    denom = y_max_val - y_min_val
+                    y_norm = (y_val - y_min_val) / denom if denom else 0.0
+                row.append(y_norm)
             rows.append(row)
 
     return headers, rows

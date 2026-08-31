@@ -62,7 +62,7 @@ To open the graphical app instead:
 def _first_positional(args: list[str]) -> str | None:
     """First argument that is not an option flag or its value (used to sniff a folder)."""
     skip_next = False
-    for token in args:
+    for index, token in enumerate(args):
         if skip_next:
             skip_next = False
             continue
@@ -72,12 +72,26 @@ def _first_positional(args: list[str]) -> str | None:
             if "=" not in token and token in {
                 "--color", "--ticks", "--tick-setting", "--tick-coordinates",
                 "--axis-values", "--axis", "--output-dir", "--out", "-o",
-                "--pic-dir", "-v", "--verbose",
+                "--pic-dir",
             }:
                 skip_next = True
+            elif token in {"-v", "--verbose"}:
+                # -v's level is OPTIONAL (nargs='?'); only a numeric token attaches to
+                # it. Blanket-skipping used to swallow a following folder path, so
+                # `digitizer.py -v C:\charts` never reached batch mode.
+                following = args[index + 1] if index + 1 < len(args) else None
+                skip_next = following is not None and _is_int(following)
             continue
         return token
     return None
+
+
+def _is_int(token: str) -> bool:
+    try:
+        int(token.strip())
+    except ValueError:
+        return False
+    return True
 
 
 if __name__ == "__main__":

@@ -48,12 +48,18 @@ def digitizer_cli(
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    # Filenames can contain characters the console codepage cannot encode; never let
+    # the success print crash a run whose outputs were already written.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
     raw_args = list(sys.argv[1:] if argv is None else argv)
     if is_function_call_syntax(raw_args):
         return _run_function_call(raw_args)
 
     parser = build_parser()
-    args = parser.parse_args(_detach_nonnumeric_verbose(raw_args))
+    args = parser.parse_args(_detach_nonnumeric_verbose(_attach_negative_values(raw_args)))
 
     pic_path = args.pic_dir_option or args.pic_path
     if not pic_path:
@@ -259,6 +265,41 @@ def _detach_nonnumeric_verbose(argv: Sequence[str]) -> list[str]:
             following = args[index + 1] if index + 1 < len(args) else None
             if following is None or not _looks_like_verbose_level(following):
                 out.append("1")
+    return out
+
+
+_NEGATIVE_VALUE_FLAGS = {
+    "--axis-values", "--axis",
+    "--ticks", "--tick-setting", "--tick-coordinates",
+    "--color",
+}
+
+
+def _attach_negative_values(argv: Sequence[str]) -> list[str]:
+    """Join a value that starts with a minus onto its flag as flag=value.
+
+    argparse only recognises "-5" style tokens as values, not "-5,5,0,100", so
+    `--axis -5,5,0,100` failed with "expected one argument" even though negative
+    axis ranges are routine. The `--axis=-5,...` form always worked; make the
+    spaced form equivalent.
+    """
+    out: list[str] = []
+    skip = False
+    for index, token in enumerate(argv):
+        if skip:
+            skip = False
+            continue
+        following = argv[index + 1] if index + 1 < len(argv) else None
+        if (
+            token in _NEGATIVE_VALUE_FLAGS
+            and following is not None
+            and following.startswith("-")
+            and re.fullmatch(r"-[\d.,+\-eE\[\]() ]+", following)
+        ):
+            out.append(f"{token}={following}")
+            skip = True
+        else:
+            out.append(token)
     return out
 
 
@@ -699,7 +740,18 @@ def parse_numbers(value: Optional[str], expected: int, name: str) -> Optional[li
         flattened = _flatten(parsed)
         numbers = [float(item) for item in flattened]
     else:
-        numbers = [float(item) for item in re.findall(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", text)]
+        number_re = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+        numbers = [float(item) for item in re.findall(number_re, text)]
+        # A typo like "0,10,0,10O" still yields exactly `expected` numbers ("10O" -> "10"),
+        # silently rescaling every exported value. Refuse any leftover text that is not
+        # pure separators, instead of guessing.
+        residue = re.sub(number_re, "", text)
+        residue = re.sub(r"[\s,;\[\]()]+", "", residue)
+        if residue:
+            raise DigitizerCliError(
+                f"{name} contains unrecognized text {residue!r} in {value!r} - "
+                "expected only numbers and separators."
+            )
 
     if len(numbers) != expected:
         raise DigitizerCliError(f"{name} expects {expected} numeric values, got {len(numbers)}.")
@@ -757,7 +809,7 @@ def _prompt_values() -> Optional[dict[str, object]]:
 
     log_x = _prompt_yes_no("Log scale on the X axis? [y/N]: ", default=False)
     log_y = _prompt_yes_no("Log scale on the Y axis? [y/N]: ", default=False)
-    output_dir = _clean_input(input("Output directory [blank = image folder]: "))
+    output_dir = _clean_input(input("Output directory [blank = Downloads folder]: "))
     normalize_y = _prompt_yes_no("Add normalized Y column? (optional) [y/N]: ", default=False)
     limit_to_calibration = _prompt_yes_no("Limit points to calibration window? (optional) [y/N]: ", default=False)
 
@@ -768,7 +820,7 @@ def _prompt_values() -> Optional[dict[str, object]]:
     print(f"  tick coordinates: {ticks or 'OCR auto'}")
     print(f"  axis values: {axis_values or 'OCR auto'}")
     print(f"  log scale: X={'log' if log_x else 'linear'}, Y={'log' if log_y else 'linear'}")
-    print(f"  output directory: {output_dir or 'image folder'}")
+    print(f"  output directory: {output_dir or 'Downloads folder'}")
     print(f"  normalize y: {'yes' if normalize_y else 'no'}")
     print(f"  limit to calibration: {'yes' if limit_to_calibration else 'no'}")
     print()

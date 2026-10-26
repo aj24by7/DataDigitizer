@@ -1,3 +1,9 @@
+## 🚚 This project has moved — it is now **LinePilot Digitizer**
+
+Development, releases and the website continue at **[github.com/RayanA07/LinePilot](https://github.com/RayanA07/LinePilot)** (full commit history preserved). Downloads: [latest release](https://github.com/RayanA07/LinePilot/releases/latest) · Website: [rayana07.github.io/LinePilot](https://rayana07.github.io/LinePilot/) · Paper: [arXiv:2609.19377](https://arxiv.org/abs/2609.19377). This repository is kept as an archive of versions 2.11 to 2.15 and is no longer updated.
+
+---
+
 # Data Digitizer 2.15 — User Guide
 
 ## What is this?
